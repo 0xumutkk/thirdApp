@@ -1,0 +1,8 @@
+{
+  "name": "Third - Local Coffee & Loyalty",
+  "description": "Find the best local coffee shops, explore amenities, and manage your digital loyalty cards in one minimalist, elegant interface.",
+  "requestFramePermissions": [
+    "geolocation",
+    "camera"
+  ]
+}
