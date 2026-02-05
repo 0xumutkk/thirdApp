@@ -1,81 +1,100 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Heart, Star, MapPin, ArrowRight, Compass, ChevronDown, Sparkles, Map, Pause, Play } from 'lucide-react';
+import { Heart, Star, MapPin, ArrowRight, ChevronDown, Sparkles, Map, Pause, Play, LayoutGrid } from 'lucide-react';
 import { CAFES, COLLECTIONS } from '../data';
 import { Cafe, CafeCollection } from '../types';
 
 interface FavoritesScreenProps {
   onSelectCafe: (cafe: Cafe) => void;
   onSelectCollection: (collection: CafeCollection) => void;
-  cafes?: Cafe[]; // Added to maintain compatibility with App.tsx if needed, though snippet uses local logic
+  cafes?: Cafe[];
 }
 
 const FavoritesScreen: React.FC<FavoritesScreenProps> = ({ onSelectCafe, onSelectCollection, cafes }) => {
-  // Use cafes prop if available (real favorites), otherwise fallback to high rating (original behavior in snippet)
   const favoriteCafes = (cafes && cafes.length > 0) ? cafes : CAFES.filter(c => c.rating >= 4.7);
   const dynamicCollections = COLLECTIONS.filter(c => c.type === 'DYNAMIC');
 
   const [currentLocation, setCurrentLocation] = useState("İstanbul");
-
-  // Spotlight State
-  const [activeCollectionId, setActiveCollectionId] = useState(dynamicCollections[0].id);
+  const [activeCollectionId, setActiveCollectionId] = useState(dynamicCollections[0]?.id ?? '');
   const [isPaused, setIsPaused] = useState(false);
+  const [showSpotlightView, setShowSpotlightView] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Aktif koleksiyonu bul
+  const activeCollection = dynamicCollections.find(c => c.id === activeCollectionId) || dynamicCollections[0];
   const activeCollectionIndex = dynamicCollections.findIndex(c => c.id === activeCollectionId);
-  const activeCollection = dynamicCollections[activeCollectionIndex] || dynamicCollections[0];
 
-  // Koleksiyonlar arası otomatik geçiş döngüsü (10 saniyede bir)
   useEffect(() => {
     if (isPaused) return;
-
     const interval = setInterval(() => {
       const nextIndex = (activeCollectionIndex + 1) % dynamicCollections.length;
-      setActiveCollectionId(dynamicCollections[nextIndex].id);
-    }, 10000); // 10 saniye
-
+      setActiveCollectionId(dynamicCollections[nextIndex]?.id ?? '');
+    }, 10000);
     return () => clearInterval(interval);
   }, [activeCollectionIndex, isPaused, dynamicCollections.length]);
 
-  return (
-    <div className="h-full w-full flex flex-col overflow-y-auto no-scrollbar pb-32 bg-[#FAF9F6]">
-      {/* Header */}
-      <div className="px-8 pt-16 pb-6">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 bg-[#BC4749]/10 rounded-2xl flex items-center justify-center">
-            <Heart className="w-6 h-6 text-[#BC4749] fill-[#BC4749]" />
-          </div>
-          <h1 className="font-outfit text-3xl font-bold text-[#1B4332]">Favorilerim</h1>
+  const handleToggleView = () => {
+    setShowSpotlightView((v) => !v);
+    if (!showSpotlightView) scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const favoritesToShow = showSpotlightView ? favoriteCafes.slice(0, 2) : favoriteCafes;
+
+  const FavoriteCafeCard: React.FC<{ cafe: Cafe }> = ({ cafe }) => (
+    <div
+      onClick={() => onSelectCafe(cafe)}
+      className="bg-white rounded-[2rem] p-3 flex gap-3 border border-gray-50 shadow-sm active:scale-[0.98] transition-all cursor-pointer"
+    >
+      <img src={cafe.image} className="w-14 h-14 rounded-[1.2rem] object-cover shrink-0" alt={cafe.name} />
+      <div className="flex flex-col justify-center min-w-0">
+        <h3 className="font-outfit text-sm font-bold text-[#1B4332] truncate">{cafe.name}</h3>
+        <div className="flex items-center gap-1.5 mt-1">
+          <Star className="w-3 h-3 text-[#BC4749] fill-[#BC4749] shrink-0" />
+          <span className="text-[10px] font-black text-[#1B4332]">{cafe.rating}</span>
+          {cafe.reviews > 0 && (
+            <span className="text-[9px] font-bold text-gray-400">({cafe.reviews})</span>
+          )}
         </div>
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] ml-1">Kişisel kahve arşivin</p>
+      </div>
+    </div>
+  );
+
+  return (
+    <div ref={scrollRef} className="h-full w-full flex flex-col overflow-y-auto no-scrollbar pb-32 bg-[#FAF9F6]">
+      {/* Header + görünüm ikonu */}
+      <div className="px-8 pt-16 pb-6">
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 bg-[#BC4749]/10 rounded-2xl flex items-center justify-center shrink-0">
+              <Heart className="w-6 h-6 text-[#BC4749] fill-[#BC4749]" />
+            </div>
+            <div>
+              <h1 className="font-outfit text-3xl font-bold text-[#1B4332]">Favorilerim</h1>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Kişisel kahve arşivin</p>
+            </div>
+          </div>
+          <button
+            onClick={handleToggleView}
+            className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 transition-colors active:scale-95 ${showSpotlightView ? 'bg-[#1B4332] text-white' : 'bg-white border border-gray-100 text-[#1B4332]'}`}
+            title={showSpotlightView ? 'Tüm listeyi göster' : 'Şehrin Enleri görünümü'}
+          >
+            <LayoutGrid className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
-      {/* Favorite Cafes List (Compact) */}
+      {/* Kaydettiklerin: 2'şer alt alta. Spotlight modunda sadece ilk 2, geri kalanı gizli */}
       <div className="px-8 space-y-4 mb-8">
         <h2 className="font-outfit text-sm font-black text-[#1B4332]/40 uppercase tracking-widest px-1">Kaydettiklerin</h2>
-        <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
-          {favoriteCafes.map((cafe) => (
-            <div
-              key={cafe.id}
-              onClick={() => onSelectCafe(cafe)}
-              className="min-w-[200px] bg-white rounded-[2rem] p-3 flex gap-3 border border-gray-50 shadow-sm active:scale-[0.98] transition-all cursor-pointer"
-            >
-              <img src={cafe.image} className="w-14 h-14 rounded-[1.2rem] object-cover" alt={cafe.name} />
-              <div className="flex flex-col justify-center">
-                <h3 className="font-outfit text-sm font-bold text-[#1B4332] truncate w-24">{cafe.name}</h3>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <Star className="w-3 h-3 text-[#BC4749] fill-[#BC4749]" />
-                  <span className="text-[10px] font-black text-[#1B4332]">{cafe.rating}</span>
-                  {cafe.reviews > 0 && (
-                    <span className="text-[9px] font-bold text-gray-400">({cafe.reviews})</span>
-                  )}
-                </div>
-              </div>
-            </div>
+        <div className="grid grid-cols-2 gap-3 pb-2">
+          {favoritesToShow.map((cafe) => (
+            <FavoriteCafeCard key={cafe.id} cafe={cafe} />
           ))}
         </div>
+        {showSpotlightView && favoriteCafes.length > 2 && (
+          <p className="text-[10px] font-bold text-gray-400 px-1">Şehrin Enleri görünümünde listeleniyor.</p>
+        )}
       </div>
 
-      {/* SPOTLIGHT SECTION (The Fix) */}
+      {/* Şehrin Enleri - spotlight modunda üstte (2 mekanın hemen altında), list modunda en altta */}
       <div className="mt-2 relative">
         <div className="px-8 flex justify-between items-end mb-4">
           <div>
