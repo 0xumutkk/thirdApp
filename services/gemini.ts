@@ -1,13 +1,28 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+const getAI = () => {
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === 'PLACEHOLDER-API-KEY') {
+    console.warn("Gemini API Key is missing. AI features will be disabled.");
+    return null;
+  }
+  try {
+    return new GoogleGenAI({ apiKey });
+  } catch (e) {
+    console.error("Failed to initialize Gemini AI:", e);
+    return null;
+  }
+};
 
 export async function summarizeDailyJourney(checkIns: any[]) {
+  const ai = getAI();
+  if (!ai) return { summary: "AI summary unavailable (Key missing)", distanceKm: 0, neighborhoods: "", venueCount: checkIns.length, isRoutineChange: false };
+
   const names = checkIns.map(c => c.name).join(", ");
   const addresses = checkIns.map(c => c.address).join(" | ");
 
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-1.5-flash",
     contents: `Analyze this user's daily coffee trail: Venues: ${names}. Locations: ${addresses}. 
     Calculate stats and provide a pithy, companion-like summary. 
     If the locations suggest a city/neighborhood jump (e.g., Kadıköy to Beşiktaş), flag it as a routine change.`,
@@ -32,8 +47,11 @@ export async function summarizeDailyJourney(checkIns: any[]) {
 }
 
 export async function fetchTrendingCafes(location: string = "Istanbul") {
+  const ai = getAI();
+  if (!ai) return { text: "AI search unavailable (Key missing)", links: [] };
+
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-1.5-flash",
     contents: `Find the top 5 trending, newly opened, or most reviewed coffee shops in ${location} for this month. 
     Focus on places with unique concepts or high work-friendliness ratings. 
     Provide a list with name, description, and why they are trending.`,
@@ -52,8 +70,11 @@ export async function fetchTrendingCafes(location: string = "Istanbul") {
 }
 
 export async function fetchCafeLiveBuzz(cafeName: string, address: string) {
+  const ai = getAI();
+  if (!ai) return { text: "AI buzz unavailable (Key missing)", links: [] };
+
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-1.5-flash",
     contents: `Research the latest reviews and social media buzz for "${cafeName}" located at "${address}". 
     Summarize the current sentiment, most mentioned positive/negative points, and if there are any recent changes in their menu or hours. 
     Keep it concise and helpful for someone looking to work there.`,
@@ -72,18 +93,16 @@ export async function fetchCafeLiveBuzz(cafeName: string, address: string) {
 }
 
 export async function fetchSentimentCollections(location: string, sentiment: string) {
-  // This function simulates fetching grouped collections based on specific praise points (e.g. "Best Garden")
-  // using Google Maps Grounding data.
+  const ai = getAI();
+  if (!ai) return [];
+
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: "gemini-1.5-flash",
     contents: `Find coffee shops in ${location} that are specifically highly praised for their "${sentiment}" in reviews.`,
     config: {
       tools: [{ googleMaps: {} }],
     },
   });
 
-  // Logic to parse chunks would go here, returning a structured list.
   return response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
 }
-
-

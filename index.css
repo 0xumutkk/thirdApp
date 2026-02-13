@@ -1,7 +1,61 @@
+@import "tailwindcss";
+
 /* Global styles for Local Coffee & Loyalty */
 body {
+  font-family: 'Inter', sans-serif;
+  background-color: #FAF9F6;
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
   margin: 0;
   padding: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.font-outfit {
+  font-family: 'Outfit', sans-serif;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.custom-marker {
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cluster-marker {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1B4332;
+  border: 3px solid white;
+  color: white;
+  font-weight: 800;
+  font-family: 'Outfit', sans-serif;
+  border-radius: 50%;
+  box-shadow: 0 10px 25px rgba(27, 67, 50, 0.3);
+}
+
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-page-in {
+  animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
