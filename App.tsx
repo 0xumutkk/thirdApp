@@ -10,7 +10,7 @@ import FavoritesScreen from './components/FavoritesScreen';
 import BottomNavigation from './components/BottomNavigation';
 import GroupDetailScreen from './components/GroupDetailScreen';
 import EditorArticleScreen from './components/EditorArticleScreen';
-import { AppScreen, Cafe, CafeCollection, EditorPick } from './types';
+import { AppScreen, Cafe, CafeCollection, EditorPick, MapState } from './types';
 import { CAFES, COLLECTIONS } from './data';
 
 const App: React.FC = () => {
@@ -23,6 +23,8 @@ const App: React.FC = () => {
   const [selectedArticle, setSelectedArticle] = useState<EditorPick | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
   const [routeToCafe, setRouteToCafe] = useState<Cafe | null>(null);
+  const [screenBeforeDetail, setScreenBeforeDetail] = useState<AppScreen | null>(null);
+  const [lastMapState, setLastMapState] = useState<MapState | null>(null);
 
   React.useEffect(() => {
     if ("geolocation" in navigator) {
@@ -61,8 +63,10 @@ const App: React.FC = () => {
     setCurrentScreen('PROFILE');
   };
 
-  const navigateToDetail = (cafe: Cafe) => {
+  const navigateToDetail = (cafe: Cafe, mapState?: MapState) => {
     setSelectedCafe(cafe);
+    if (mapState) setLastMapState(mapState);
+    setScreenBeforeDetail(currentScreen);
     setCurrentScreen('DETAIL');
   };
 
@@ -102,6 +106,7 @@ const App: React.FC = () => {
             userLocation={userLocation}
             routeToCafe={routeToCafe}
             onRouteDone={() => setRouteToCafe(null)}
+            initialMapState={lastMapState}
           />
         );
       case 'DETAIL':
@@ -110,10 +115,11 @@ const App: React.FC = () => {
             cafe={cafes.find(c => c.id === selectedCafe.id) || selectedCafe}
             isFavorite={favorites.includes(selectedCafe.id)}
             onToggleFavorite={() => toggleFavorite(selectedCafe.id)}
-            onBack={() => setCurrentScreen(activeCollection ? 'COLLECTION_DETAIL' : 'HOME')}
+            onBack={() => setCurrentScreen(activeCollection ? 'COLLECTION_DETAIL' : (screenBeforeDetail ?? 'HOME'))}
             onJoin={() => joinCafe(selectedCafe.id)}
             onGoToMap={(cafe) => {
               setRouteToCafe(cafe);
+              setLastMapState(null);
               setCurrentScreen('MAP');
             }}
           />
@@ -163,6 +169,7 @@ const App: React.FC = () => {
           currentScreen={currentScreen}
           onNavigate={(s) => {
             setActiveCollection(null);
+            if (currentScreen === 'MAP' && s !== 'MAP') setLastMapState(null);
             setCurrentScreen(s);
             if (s !== 'MAP') setRouteToCafe(null);
           }}

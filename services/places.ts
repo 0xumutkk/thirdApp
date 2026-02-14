@@ -103,9 +103,13 @@ function placeResultToCafe(
 export async function fetchNearbyCafesFromPlaces(
   lat: number,
   lng: number,
-  radiusMeters: number
+  radiusMeters: number,
+  keyword?: string
 ): Promise<Cafe[]> {
-  await loadGoogleMapsScript();
+  await loadGoogleMapsScript().catch(err => {
+    console.error(err);
+    throw err;
+  });
 
   const google = window.google;
   if (!google?.maps?.places) return [];
@@ -122,6 +126,7 @@ export async function fetchNearbyCafesFromPlaces(
       location: new google.maps.LatLng(lat, lng),
       radius: radiusMeters,
       type: 'cafe',
+      keyword: keyword || undefined
     };
 
     service.nearbySearch(request, (results, status) => {

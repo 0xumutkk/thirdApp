@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Navigation, Navigation2, Star, Briefcase, Leaf, Utensils, Coffee, Zap, MessageSquare, Mountain, Plus, Search, MapPin } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
 import Supercluster from 'supercluster';
-import { Cafe } from '../types';
+import { Cafe, MapState } from '../types';
 import { fetchNearbyCafesFromPlaces } from '../services/places';
 
 const CATEGORY_SEARCH_TERMS: Record<string, string[]> = {
@@ -49,32 +49,59 @@ function createCirclePolygon(lat: number, lng: number, radiusMeters: number): Ge
 }
 
 interface MapScreenProps {
-  onSelectCafe: (cafe: Cafe) => void;
+  onSelectCafe: (cafe: Cafe, mapState?: MapState) => void;
   cafes: Cafe[];
   userLocation: { lat: number, lng: number } | null;
   routeToCafe?: Cafe | null;
   onRouteDone?: () => void;
+  initialMapState?: MapState | null;
 }
 
-const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation: propUserLocation, routeToCafe, onRouteDone }) => {
+const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation: propUserLocation, routeToCafe, onRouteDone, initialMapState }) => {
   const defaultCenter = propUserLocation || { lat: 40.9910, lng: 29.0270 };
-  const [userLocation, setUserLocation] = useState<{ lat: number, lng: number }>(defaultCenter);
-  const [pinLocation, setPinLocation] = useState<{ lat: number, lng: number }>(defaultCenter);
+  const initialCenter = initialMapState
+    ? (initialMapState.hasPinBeenPlaced ? initialMapState.pinLocation : initialMapState.userLocation)
+    : defaultCenter;
+  const [userLocation, setUserLocation] = useState<{ lat: number, lng: number }>(() => initialMapState?.userLocation ?? defaultCenter);
+  const [pinLocation, setPinLocation] = useState<{ lat: number, lng: number }>(() => initialMapState?.pinLocation ?? defaultCenter);
   const [isPanelExpanded, setIsPanelExpanded] = useState(false);
-  const [mapCafes, setMapCafes] = useState<Cafe[]>([]);
+  const [mapCafes, setMapCafes] = useState<Cafe[]>(() => initialMapState?.mapCafes ?? []);
   const [mapReady, setMapReady] = useState(false);
-  const [activeFilters, setActiveFilters] = useState<string[]>([]);
-  const [selectedRadius, setSelectedRadius] = useState<number | null>(1000); // null = seçim yok, çember yok
-  const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilters, setActiveFilters] = useState<string[]>(() => initialMapState?.activeFilters ?? []);
+  const [selectedRadius, setSelectedRadius] = useState<number | null>(() => initialMapState?.selectedRadius ?? 1000);
+  const [searchQuery, setSearchQuery] = useState(() => initialMapState?.searchQuery ?? '');
   const [pinModeActive, setPinModeActive] = useState(false);
-  const [hasPinBeenPlaced, setHasPinBeenPlaced] = useState(false);
+  const [hasPinBeenPlaced, setHasPinBeenPlaced] = useState(() => initialMapState?.hasPinBeenPlaced ?? false);
   const [currentTime] = useState(() => new Date());
+  const [isLoading, setIsLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(() => initialMapState?.searchError ?? null);
+
   const routeMarkerRef = useRef<maplibregl.Marker | null>(null);
   const pinMarkerRef = useRef<maplibregl.Marker | null>(null);
   const pinModeActiveRef = useRef(false);
+  const mapStateRef = useRef<MapState | null>(null);
+  const routeToCafeRef = useRef<Cafe | null>(null);
+
+  useEffect(() => {
+    routeToCafeRef.current = routeToCafe ?? null;
+  }, [routeToCafe]);
+
   useEffect(() => {
     pinModeActiveRef.current = pinModeActive;
   }, [pinModeActive]);
+
+  useEffect(() => {
+    mapStateRef.current = {
+      pinLocation,
+      selectedRadius,
+      mapCafes,
+      hasPinBeenPlaced,
+      userLocation,
+      activeFilters,
+      searchQuery,
+      searchError,
+    };
+  }, [pinLocation, selectedRadius, mapCafes, hasPinBeenPlaced, userLocation, activeFilters, searchQuery, searchError]);
 
   const circleCenter = hasPinBeenPlaced ? pinLocation : userLocation;
 
@@ -112,6 +139,7 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
           const terms = CATEGORY_SEARCH_TERMS[filterId] || [];
           return terms.some(
             (term) =>
+              cafe.name.toLowerCase().includes(term) ||
               cafe.description?.toLowerCase().includes(term) ||
               cafe.amenities?.some((a) => a.toLowerCase().includes(term)) ||
               cafe.moods?.some((m) => m.toLowerCase().includes(term))
@@ -142,6 +170,40 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
     }
   }, [propUserLocation]);
 
+  const handleSearch = useCallback(async () => {
+    if (!mapReady || !circleCenter || selectedRadius === null) return;
+
+    setIsLoading(true);
+    setSearchError(null);
+
+    const keyword = activeFilters.map(f => {
+      const terms = CATEGORY_SEARCH_TERMS[f] || [];
+      return terms[0];
+    }).join(' ');
+
+    try {
+      const results = await fetchNearbyCafesFromPlaces(
+        circleCenter.lat,
+        circleCenter.lng,
+        selectedRadius,
+        keyword || undefined
+      );
+      setMapCafes(results);
+      if (results.length === 0) {
+        setSearchError("Bu bölgede uygun mekan bulunamadı.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setSearchError("Arama hatası. API anahtarını kontrol edin.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [mapReady, circleCenter, selectedRadius, activeFilters]);
+
+  useEffect(() => {
+    handleSearch();
+  }, [selectedRadius, circleCenter.lat, circleCenter.lng]);
+
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
@@ -166,11 +228,15 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
       const { cluster, point_count: pointCount, cafeId, rating } = feature.properties;
 
       const el = document.createElement('div');
+      const stopMapGesture = (e: Event) => {
+        e.stopPropagation();
+      };
       if (cluster) {
         el.className = 'cluster-marker';
         el.style.width = '40px';
         el.style.height = '40px';
         el.innerText = pointCount.toString();
+        ['mousedown', 'mouseup', 'click', 'touchstart', 'touchend'].forEach(ev => el.addEventListener(ev, stopMapGesture));
         el.onclick = () => {
           const expansionZoom = clusterIndex.current!.getClusterExpansionZoom(feature.id as number);
           map.flyTo({ center: [lng, lat], zoom: expansionZoom });
@@ -187,13 +253,17 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
         el.style.justifyContent = 'center';
         el.style.transform = 'rotate(45deg)';
         el.style.boxShadow = '0 8px 16px rgba(0,0,0,0.2)';
-        el.innerHTML = `<div style="transform: rotate(-45deg); color: white; font-weight: 800; font-size: 10px;">${rating}</div>`;
+        el.style.pointerEvents = 'auto';
+        el.innerHTML = `<div style="transform: rotate(-45deg); color: white; font-weight: 800; font-size: 10px; pointer-events: none;">${rating}</div>`;
 
         const cafe = filteredCafes.find(c => c.id === cafeId);
-        el.onclick = (e) => {
+        el.style.cursor = 'pointer';
+        ['mousedown', 'touchstart', 'pointerdown'].forEach(ev => el.addEventListener(ev, stopMapGesture));
+        el.addEventListener('click', (e) => {
           e.stopPropagation();
-          if (cafe) onSelectCafe(cafe);
-        };
+          e.preventDefault();
+          if (cafe) onSelectCafe(cafe, mapStateRef.current ?? undefined);
+        });
       }
 
       const marker = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
@@ -208,7 +278,7 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
     const map = new maplibregl.Map({
       container: mapContainer.current,
       style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
-      center: [defaultCenter.lng, defaultCenter.lat],
+      center: [initialCenter.lng, initialCenter.lat],
       zoom: 15,
       attributionControl: false,
     });
@@ -241,6 +311,47 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
       });
 
       setMapReady(true);
+
+      const cafe = routeToCafeRef.current;
+      if (cafe?.coordinates) {
+        const origin = propUserLocation ?? userLocation;
+        const { lat: uLat, lng: uLng } = origin;
+        const { lat: cLat, lng: cLng } = cafe.coordinates;
+        const url = `https://router.project-osrm.org/route/v1/driving/${uLng},${uLat};${cLng},${cLat}?overview=full&geometries=geojson`;
+        fetch(url)
+          .then((res) => res.json())
+          .then((data) => {
+            if (!mapInstance.current?.isStyleLoaded()) return;
+            if (data.code !== 'Ok' || !data.routes?.[0]?.geometry?.coordinates?.length) return;
+            const coords = data.routes[0].geometry.coordinates as [number, number][];
+            const geojson = { type: 'Feature' as const, properties: {}, geometry: { type: 'LineString' as const, coordinates: coords } };
+            const m = mapInstance.current!;
+            if (m.getSource(ROUTE_SOURCE_ID)) {
+              (m.getSource(ROUTE_SOURCE_ID) as maplibregl.GeoJSONSource).setData(geojson);
+            } else {
+              m.addSource(ROUTE_SOURCE_ID, { type: 'geojson', data: geojson });
+              m.addLayer({
+                id: ROUTE_LAYER_ID,
+                type: 'line',
+                source: ROUTE_SOURCE_ID,
+                layout: { 'line-join': 'round', 'line-cap': 'round' },
+                paint: { 'line-color': '#3B82F6', 'line-width': 6, 'line-opacity': 0.8 },
+              });
+            }
+            const bounds = new maplibregl.LngLatBounds();
+            coords.forEach(([lng, lat]) => bounds.extend([lng, lat]));
+            bounds.extend([uLng, uLat]);
+            bounds.extend([cLng, cLat]);
+            setTimeout(() => { if (m.isStyleLoaded()) m.fitBounds(bounds, { padding: 100, maxZoom: 15, duration: 1500 }); }, 100);
+            routeMarkerRef.current?.remove();
+            const destEl = document.createElement('div');
+            destEl.style.cssText = 'width:36px;height:36px;background:#3B82F6;border-radius:10px;border:3px solid white;box-shadow:0 0 20px rgba(59,130,246,0.6);display:flex;align-items:center;justify-content:center;cursor:pointer;';
+            destEl.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>';
+            destEl.onclick = () => onSelectCafe(cafe, mapStateRef.current ?? undefined);
+            routeMarkerRef.current = new maplibregl.Marker({ element: destEl }).setLngLat([cLng, cLat]).addTo(m);
+          })
+          .catch((err) => console.error('[Routing] Error:', err));
+      }
     });
 
     map.on('moveend', () => {
@@ -306,10 +417,6 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
         geometry: geo,
       });
     }
-
-    fetchNearbyCafesFromPlaces(circleCenter.lat, circleCenter.lng, selectedRadius)
-      .then((results) => setMapCafes(results))
-      .catch(() => setMapCafes([]));
   }, [circleCenter.lat, circleCenter.lng, selectedRadius, mapReady]);
 
   useEffect(() => {
@@ -325,7 +432,7 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
 
   useEffect(() => {
     const map = mapInstance.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map || !mapReady || !map.isStyleLoaded()) return;
 
     const removeRoute = () => {
       const m = mapInstance.current;
@@ -343,24 +450,33 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
       return;
     }
 
-    const { lat: uLat, lng: uLng } = userLocation;
+    const routeOrigin = propUserLocation ?? userLocation;
+    const { lat: uLat, lng: uLng } = routeOrigin;
     const { lat: cLat, lng: cLng } = routeToCafe.coordinates;
+
+    console.log(`[Routing] Fetching blue route: from [${uLat}, ${uLng}] to [${cLat}, ${cLng}]`);
+
     const url = `https://router.project-osrm.org/route/v1/driving/${uLng},${uLat};${cLng},${cLat}?overview=full&geometries=geojson`;
 
     fetch(url)
       .then((res) => res.json())
       .then((data) => {
         const m = mapInstance.current;
-        if (!m || !m.isStyleLoaded() || data.code !== 'Ok' || !data.routes?.[0]?.geometry?.coordinates?.length) {
+        if (!m || !m.isStyleLoaded()) return;
+
+        if (data.code !== 'Ok' || !data.routes?.[0]?.geometry?.coordinates?.length) {
+          console.warn("[Routing] No route found:", data);
           removeRoute();
           return;
         }
+
         const coords = data.routes[0].geometry.coordinates as [number, number][];
         const geojson = {
           type: 'Feature' as const,
           properties: {},
           geometry: { type: 'LineString' as const, coordinates: coords },
         };
+
         if (m.getSource(ROUTE_SOURCE_ID)) {
           (m.getSource(ROUTE_SOURCE_ID) as maplibregl.GeoJSONSource).setData(geojson);
         } else {
@@ -370,31 +486,49 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
             type: 'line',
             source: ROUTE_SOURCE_ID,
             layout: { 'line-join': 'round', 'line-cap': 'round' },
-            paint: { 'line-color': '#BC4749', 'line-width': 4 },
+            paint: {
+              'line-color': '#3B82F6', // Blue route
+              'line-width': 6,
+              'line-opacity': 0.8
+            },
           });
         }
+
         const bounds = new maplibregl.LngLatBounds();
         coords.forEach(([lng, lat]) => bounds.extend([lng, lat]));
         bounds.extend([uLng, uLat]);
         bounds.extend([cLng, cLat]);
-        m.fitBounds(bounds, { padding: 80, maxZoom: 15 });
+
+        // Add a slight delay to ensure the layer is rendered before fitting
+        setTimeout(() => {
+          if (m.isStyleLoaded()) {
+            m.fitBounds(bounds, { padding: 100, maxZoom: 15, duration: 1500 });
+          }
+        }, 100);
 
         routeMarkerRef.current?.remove();
         const destEl = document.createElement('div');
-        destEl.style.width = '40px';
-        destEl.style.height = '40px';
-        destEl.style.backgroundColor = '#BC4749';
-        destEl.style.borderRadius = '12px';
+        destEl.style.width = '36px';
+        destEl.style.height = '36px';
+        destEl.style.backgroundColor = '#3B82F6'; // Matching blue
+        destEl.style.borderRadius = '10px';
         destEl.style.border = '3px solid white';
-        destEl.style.boxShadow = '0 4px 12px rgba(188,71,73,0.5)';
+        destEl.style.boxShadow = '0 0 20px rgba(59, 130, 246, 0.6)';
+        destEl.style.cursor = 'pointer';
+        destEl.innerHTML = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:white;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg></div>';
+        destEl.onclick = () => onSelectCafe(routeToCafe, mapStateRef.current ?? undefined);
+
         routeMarkerRef.current = new maplibregl.Marker({ element: destEl })
           .setLngLat([cLng, cLat])
           .addTo(m);
       })
-      .catch(() => removeRoute());
+      .catch((err) => {
+        console.error("[Routing] Error:", err);
+        removeRoute();
+      });
 
     return removeRoute;
-  }, [routeToCafe, mapReady, userLocation.lat, userLocation.lng]);
+  }, [routeToCafe, mapReady, propUserLocation, userLocation.lat, userLocation.lng]);
 
   const RADIUS_OPTIONS = [
     { label: '500m', value: 500 },
@@ -408,7 +542,6 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
 
       <div className="absolute top-10 left-0 right-0 px-6 z-20 space-y-4">
         <div className="flex flex-col gap-3">
-          {/* Search */}
           <div className="flex items-center gap-2 bg-white/90 backdrop-blur-md rounded-2xl shadow-lg border border-white/50 px-4 py-3">
             <Search className="w-4 h-4 text-[#BC4749] shrink-0" />
             <input
@@ -420,9 +553,9 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
             />
           </div>
 
-          {/* Radius: 500m, 1km, 2km */}
-          <div className="flex gap-1.5 p-1 bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border border-white/40 w-fit">
-            {RADIUS_OPTIONS.map((opt) => (
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex gap-1.5 p-1 bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border border-white/40">
+              {RADIUS_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
                   onClick={() => setSelectedRadius((prev) => (prev === opt.value ? null : opt.value))}
@@ -431,14 +564,34 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
                   {opt.label}
                 </button>
               ))}
+            </div>
+            <button
+              onClick={handleSearch}
+              disabled={isLoading}
+              title="Bu bölgede ara"
+              className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black transition-all active:scale-95 ${isLoading ? 'bg-gray-300 text-white cursor-not-allowed' : 'bg-[#1B4332] text-white shadow-md hover:bg-[#2d5a45]'}`}
+            >
+              {isLoading ? (
+                <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Search className="w-3.5 h-3.5" />
+              )}
+              {isLoading ? '...' : 'Bölgede ara'}
+            </button>
           </div>
+
           {pinModeActive && (
             <p className="text-[9px] font-bold text-[#BC4749]">Haritaya tıklayın, pin yerleşsin</p>
+          )}
+
+          {searchError && (
+            <div className="bg-red-50 border border-red-100 p-2 rounded-xl">
+              <p className="text-[10px] text-red-600 font-bold text-center">{searchError}</p>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Konumuma git */}
       <button
         onClick={() => mapInstance.current?.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 16 })}
         className="absolute bottom-[300px] right-6 w-12 h-12 bg-white rounded-2xl shadow-2xl flex items-center justify-center text-[#1B4332] z-10 active:scale-90"
@@ -446,7 +599,6 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
         <Navigation className="w-5 h-5 fill-[#1B4332]" />
       </button>
 
-      {/* Pin butonu - tıklanınca pin modu: haritaya tıklayarak pin yerleştir */}
       <button
         onClick={() => setPinModeActive((on) => !on)}
         className={`absolute bottom-[300px] right-[5.5rem] w-12 h-12 rounded-2xl shadow-2xl flex items-center justify-center z-10 active:scale-90 transition-all ${pinModeActive ? 'bg-[#BC4749] text-white' : 'bg-white text-[#1B4332]'}`}
@@ -468,11 +620,10 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
                 <button
                   key={filter.id}
                   onClick={() => toggleFilter(filter.id)}
-                  className={`shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-[1.2rem] border transition-all font-bold text-[10px] uppercase tracking-tighter active:scale-95 ${
-                    activeFilters.includes(filter.id)
-                      ? 'bg-[#1B4332] border-[#1B4332] text-white shadow-lg'
-                      : 'bg-white/60 backdrop-blur-md border-white/80 text-[#1B4332]'
-                  }`}
+                  className={`shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-[1.2rem] border transition-all font-bold text-[10px] uppercase tracking-tighter active:scale-95 ${activeFilters.includes(filter.id)
+                    ? 'bg-[#1B4332] border-[#1B4332] text-white shadow-lg'
+                    : 'bg-white/60 backdrop-blur-md border-white/80 text-[#1B4332]'
+                    }`}
                 >
                   <span className={activeFilters.includes(filter.id) ? 'text-white' : 'text-[#BC4749]'}>
                     {filter.icon}
@@ -490,16 +641,24 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
               {selectedRadius !== null && ` (${selectedRadius === 500 ? '500m' : selectedRadius === 1000 ? '1km' : '2km'})`}
             </h3>
             {filteredCafes.map(cafe => (
-              <div key={cafe.id} onClick={() => onSelectCafe(cafe)} className="bg-white rounded-[2rem] p-3 flex gap-4 border border-gray-100 shadow-sm cursor-pointer">
-                <img src={cafe.image} className="w-16 h-16 rounded-2xl object-cover" alt={cafe.name} />
-                <div className="flex-1 flex flex-col justify-center">
+              <button
+                key={cafe.id}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectCafe(cafe, mapStateRef.current ?? undefined);
+                }}
+                className="w-full text-left bg-white rounded-[2rem] p-3 flex gap-4 border border-gray-100 shadow-sm cursor-pointer active:scale-[0.98] transition-transform"
+              >
+                <img src={cafe.image} className="w-16 h-16 rounded-2xl object-cover shrink-0" alt={cafe.name} />
+                <div className="flex-1 flex flex-col justify-center min-w-0">
                   <h4 className="font-bold text-[#1B4332] text-sm">{cafe.name}</h4>
                   <div className="flex justify-between items-center mt-1">
                     <span className="text-[10px] font-bold text-gray-400">{cafe.distance}</span>
                     <span className="text-[10px] font-black text-[#BC4749]">{cafe.rating} ★ {cafe.reviews > 0 && `(${cafe.reviews})`}</span>
                   </div>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div >

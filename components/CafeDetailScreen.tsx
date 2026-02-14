@@ -117,23 +117,26 @@ const CafeDetailScreen: React.FC<CafeDetailScreenProps> = ({ cafe, onBack, onJoi
             ))}
           </div>
 
-          {/* Konum - Mekan haritada */}
-          <div className="mb-10 p-5 bg-[#1B4332]/5 backdrop-blur-xl rounded-[3rem] border border-gray-100 overflow-hidden">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-xl bg-[#BC4749]/10 flex items-center justify-center">
-                <MapPin className="w-4 h-4 text-[#BC4749]" />
+          {/* Konum - Mekan haritada (genel UI ile uyumlu kart + buton) */}
+          <div className="mb-10 p-6 bg-[#FAF9F6] rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-2xl bg-[#BC4749]/10 flex items-center justify-center shrink-0">
+                <MapPin className="w-5 h-5 text-[#BC4749]" />
               </div>
-              <h3 className="font-outfit text-xs font-black text-[#1B4332] uppercase tracking-[0.2em]">Konum</h3>
+              <div>
+                <h3 className="font-outfit text-sm font-black text-[#1B4332] uppercase tracking-widest">Konum</h3>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mt-0.5">Haritada görüntüle</p>
+              </div>
             </div>
             <div
               ref={mapContainerRef}
-              className="w-full h-[180px] rounded-2xl overflow-hidden border border-gray-100 shadow-sm bg-[#F0EFEB]"
+              className="w-full h-[180px] rounded-[2rem] overflow-hidden border border-gray-100 bg-[#F0EFEB]"
               aria-label="Mekan konumu"
             />
             {onGoToMap && (
               <button
                 onClick={() => onGoToMap(cafe)}
-                className="w-full mt-4 py-4 rounded-2xl bg-[#BC4749] text-white font-outfit font-bold text-sm uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-[#BC4749]/20 active:scale-[0.98] transition-all"
+                className="w-full mt-4 py-4 rounded-[2.5rem] bg-[#1B4332] text-white font-outfit font-bold text-sm uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_15px_40px_rgba(27,67,50,0.2)] active:scale-[0.98] transition-all"
               >
                 <Navigation2 className="w-5 h-5" />
                 Mekana Git

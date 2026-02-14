@@ -70,6 +70,17 @@ export interface EditorPick {
 
 export type AppScreen = 'AUTH' | 'HOME' | 'MAP' | 'DETAIL' | 'PROFILE' | 'FAVES' | 'COLLECTION_DETAIL' | 'ARTICLE';
 
+export interface MapState {
+  pinLocation: { lat: number; lng: number };
+  selectedRadius: number | null;
+  mapCafes: Cafe[];
+  hasPinBeenPlaced: boolean;
+  userLocation: { lat: number; lng: number };
+  activeFilters: string[];
+  searchQuery: string;
+  searchError: string | null;
+}
+
 export interface Filter {
   id: MoodType;
   label: string;
