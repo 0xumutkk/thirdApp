@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, MapPin, Wallet, Star, Sparkles, Coffee, Check, Target, SlidersHorizontal, Loader2, ExternalLink, RefreshCw, Clock, ChevronDown, Radio, Laptop, Leaf, Wifi, Utensils, Zap, MessageSquare, Mountain, Moon, Briefcase, Plus, BookOpen, ArrowRight, User, Timer, Ticket, Map, ChevronLeft } from 'lucide-react';
+import { Search, MapPin, Wallet, Star, Sparkles, Coffee, Check, Target, SlidersHorizontal, Loader2, ExternalLink, RefreshCw, Clock, ChevronDown, Radio, Laptop, Leaf, Wifi, Utensils, Zap, MessageSquare, Mountain, Moon, Briefcase, Plus, BookOpen, ArrowRight, User, Timer, Ticket, Map, ChevronLeft, Heart } from 'lucide-react';
 import { CAFES, CAMPAIGNS, EDITOR_PICKS } from '../data';
 import { Cafe, CafeCollection, GroundingLink, EditorPick, Campaign } from '../types';
 
@@ -46,23 +46,19 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
   }, [cafes.length]);
 
   const dynamicShortcuts = useMemo(() => {
-    const hour = currentTime.getHours();
-    const baseFilters = [
+    // User expectation-based filters
+    const userNeeds = [
       { id: 'work', label: 'Çalışma', icon: <Briefcase className="w-3 h-3" /> },
-      { id: 'garden', label: 'Bahçe', icon: <Leaf className="w-3 h-3" /> },
-      { id: 'wifi', label: 'Hızlı WiFi', icon: <Wifi className="w-3 h-3" /> }
+      { id: 'view', label: 'Manzara', icon: <Mountain className="w-3 h-3" /> },
+      { id: 'focus', label: 'Odaklan', icon: <Zap className="w-3 h-3" /> },
+      { id: 'social', label: 'Sosyalleş', icon: <MessageSquare className="w-3 h-3" /> },
+      { id: 'garden', label: 'Bahçe Keyfi', icon: <Leaf className="w-3 h-3" /> },
+      { id: 'creative', label: 'İlham Al', icon: <Sparkles className="w-3 h-3" /> },
+      { id: 'date', label: 'Date', icon: <Heart className="w-3 h-3" /> }
     ];
 
-    let timeBased = [];
-    if (hour >= 6 && hour < 11) {
-      timeBased = [{ id: 'breakfast', label: 'Kahvaltı', icon: <Utensils className="w-3 h-3" /> }, { id: 'filter', label: 'Filtre', icon: <Coffee className="w-3 h-3" /> }];
-    } else if (hour >= 11 && hour < 17) {
-      timeBased = [{ id: 'focus', label: 'Odaklan', icon: <Zap className="w-3 h-3" /> }, { id: 'lunch', label: 'Öğle', icon: <Utensils className="w-3 h-3" /> }];
-    } else {
-      timeBased = [{ id: 'social', label: 'Sohbet', icon: <MessageSquare className="w-3 h-3" /> }, { id: 'view', label: 'Manzara', icon: <Mountain className="w-3 h-3" /> }];
-    }
-    return [...timeBased, ...baseFilters];
-  }, [currentTime]);
+    return userNeeds;
+  }, []);
 
   const toggleFilter = (id: string) => {
     setActiveFilters(prev =>
@@ -81,25 +77,32 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
 
   const nearbyCafes = useMemo(() => {
     const searchTerms: Record<string, string[]> = {
-      breakfast: ['kahvaltı', 'brunch'],
-      filter: ['filtre', 'demleme'],
-      focus: ['focus', 'sessiz', 'calm'],
-      lunch: ['öğle', 'sandviç'],
-      social: ['social', 'sosyal', 'arkadaş'],
-      view: ['manzara', 'deniz'],
-      work: ['work', 'çalışma', 'wifi', 'priz'],
-      garden: ['bahçe', 'outdoor'],
-      wifi: ['50 mbps', '100 mbps', 'hızlı']
+      work: ['work', 'çalışma', 'laptop', 'priz', 'desk'],
+      view: ['manzara', 'deniz', 'teras', 'view', 'boğaz'],
+      focus: ['focus', 'sessiz', 'calm', 'quiet', 'huzur'],
+      social: ['social', 'sosyal', 'arkadaş', 'lively', 'sohbet'],
+      garden: ['bahçe', 'outdoor', 'terrace', 'açık hava'],
+      creative: ['creative', 'sanat', 'art', 'design', 'ilham', 'yaratıcılık'],
+      date: ['romantic', 'date', 'randevu', 'loş', 'şık', 'romantik'],
+      breakfast: ['kahvaltı', 'brunch', 'yumurta'],
+      filter: ['filtre', 'demleme', 'v60']
     };
 
     return cafes.filter(cafe => {
       if (activeFilters.length === 0) return true;
-      return activeFilters.some(filterId => {
-        const terms = searchTerms[filterId] || [];
+
+      return activeFilters.every(filterId => {
+        // Special mapping for common needs to specific cafe props
+        if (filterId === 'work' && (cafe.powerOutlets || (cafe.wifiSpeed && parseInt(cafe.wifiSpeed) >= 50))) return true;
+        if (filterId === 'focus' && cafe.noiseLevel === 'Sessiz') return true;
+        if (filterId === 'garden' && (cafe.hasGarden || cafe.amenities.some(a => ['Outdoor', 'Garden', 'Bahçe'].includes(a)))) return true;
+
+        // General term search for others
+        const terms = searchTerms[filterId] || [filterId];
         return terms.some(term =>
-          cafe.description.toLowerCase().includes(term) ||
-          cafe.amenities.some(a => a.toLowerCase().includes(term)) ||
-          cafe.moods.some(m => m.toLowerCase().includes(term))
+          cafe.description.toLowerCase().includes(term.toLowerCase()) ||
+          cafe.amenities.some(a => a.toLowerCase().includes(term.toLowerCase())) ||
+          cafe.moods.some(m => m.toLowerCase().includes(term.toLowerCase()))
         );
       });
     });

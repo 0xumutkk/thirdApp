@@ -96,9 +96,17 @@ function placeResultToCafe(
   };
 }
 
+interface CacheEntry {
+  cafes: Cafe[];
+  timestamp: number;
+}
+
+const CACHE = new Map<string, CacheEntry>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
+
 /**
  * Fetches nearby cafes from Google Places (Maps JavaScript API + Places library).
- * Requires VITE_GOOGLE_MAPS_API_KEY in .env.local and Places API + Maps JavaScript API enabled.
+ * Includes an in-memory cache to save API costs and improve performance.
  */
 export async function fetchNearbyCafesFromPlaces(
   lat: number,
@@ -106,6 +114,19 @@ export async function fetchNearbyCafesFromPlaces(
   radiusMeters: number,
   keyword?: string
 ): Promise<Cafe[]> {
+  // Round coordinates to ~11m precision (4 decimal places) to improve cache hit rate
+  const roundedLat = Number(lat.toFixed(4));
+  const roundedLng = Number(lng.toFixed(4));
+  const cacheKey = `${roundedLat},${roundedLng},${radiusMeters},${keyword || ''}`;
+
+  const cached = CACHE.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    console.log(`[PlacesService] Cache HIT for key: ${cacheKey}`);
+    return cached.cafes;
+  }
+
+  console.log(`[PlacesService] Cache MISS. Fetching from API: ${cacheKey}`);
+
   await loadGoogleMapsScript().catch(err => {
     console.error(err);
     throw err;
@@ -121,7 +142,7 @@ export async function fetchNearbyCafesFromPlaces(
   });
   const service = new google.maps.places.PlacesService(map);
 
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const request: google.maps.places.PlaceSearchRequest = {
       location: new google.maps.LatLng(lat, lng),
       radius: radiusMeters,
@@ -141,6 +162,13 @@ export async function fetchNearbyCafesFromPlaces(
           if (b.rating !== a.rating) return b.rating - a.rating;
           return b.reviews - a.reviews;
         });
+
+      // Update cache
+      CACHE.set(cacheKey, {
+        cafes,
+        timestamp: Date.now()
+      });
+
       resolve(cafes);
     });
   });

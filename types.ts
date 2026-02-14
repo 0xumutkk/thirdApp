@@ -23,6 +23,8 @@ export interface Cafe {
   wifiSpeed?: string;
   powerOutlets?: boolean;
   noiseLevel?: 'Sessiz' | 'Orta' | 'Canlı';
+  hasGarden?: boolean;
+  isOpenNow?: boolean;
   moods: MoodType[];
   coordinates: {
     lat: number;

@@ -1,20 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Navigation, Navigation2, Star, Briefcase, Leaf, Utensils, Coffee, Zap, MessageSquare, Mountain, Plus, Search, MapPin } from 'lucide-react';
+import { Navigation, Navigation2, Star, Briefcase, Leaf, Utensils, Coffee, Zap, MessageSquare, Mountain, Plus, Search, MapPin, Wifi, Clock, ChevronDown, Radio, Sparkles, Heart } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
 import Supercluster from 'supercluster';
 import { Cafe, MapState } from '../types';
 import { fetchNearbyCafesFromPlaces } from '../services/places';
 
 const CATEGORY_SEARCH_TERMS: Record<string, string[]> = {
-  breakfast: ['kahvaltı', 'brunch'],
-  filter: ['filtre', 'demleme'],
-  focus: ['focus', 'sessiz', 'calm'],
-  lunch: ['öğle', 'sandviç'],
-  social: ['social', 'sosyal', 'arkadaş'],
-  view: ['manzara', 'deniz'],
-  work: ['work', 'çalışma', 'wifi', 'priz'],
-  garden: ['bahçe', 'outdoor'],
-  wifi: ['50 mbps', '100 mbps', 'hızlı'],
+  work: ['work', 'çalışma', 'laptop', 'priz', 'desk'],
+  view: ['manzara', 'deniz', 'teras', 'view', 'boğaz'],
+  focus: ['focus', 'sessiz', 'calm', 'quiet', 'huzur'],
+  social: ['social', 'sosyal', 'arkadaş', 'lively', 'sohbet'],
+  garden: ['bahçe', 'outdoor', 'terrace', 'açık hava'],
+  creative: ['creative', 'sanat', 'art', 'design', 'ilham', 'yaratıcılık'],
+  date: ['romantic', 'date', 'randevu', 'loş', 'şık', 'romantik'],
+  breakfast: ['kahvaltı', 'brunch', 'yumurta'],
+  filter: ['filtre', 'demleme', 'v60']
 };
 
 const ROUTE_SOURCE_ID = 'route-source';
@@ -106,43 +106,37 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
   const circleCenter = hasPinBeenPlaced ? pinLocation : userLocation;
 
   const categoryShortcuts = useMemo(() => {
-    const hour = currentTime.getHours();
-    const base = [
+    // User expectation-based filters
+    const userNeeds = [
       { id: 'work', label: 'Çalışma', icon: <Briefcase className="w-3 h-3" /> },
-      { id: 'garden', label: 'Bahçe', icon: <Leaf className="w-3 h-3" /> },
+      { id: 'view', label: 'Manzara', icon: <Mountain className="w-3 h-3" /> },
+      { id: 'focus', label: 'Odaklan', icon: <Zap className="w-3 h-3" /> },
+      { id: 'social', label: 'Sosyalleş', icon: <MessageSquare className="w-3 h-3" /> },
+      { id: 'garden', label: 'Bahçe Keyfi', icon: <Leaf className="w-3 h-3" /> },
+      { id: 'creative', label: 'İlham Al', icon: <Sparkles className="w-3 h-3" /> },
+      { id: 'date', label: 'Date', icon: <Heart className="w-3 h-3" /> }
     ];
-    let timeBased: { id: string; label: string; icon: React.ReactNode }[];
-    if (hour >= 6 && hour < 11) {
-      timeBased = [
-        { id: 'breakfast', label: 'Kahvaltı', icon: <Utensils className="w-3 h-3" /> },
-        { id: 'filter', label: 'Filtre', icon: <Coffee className="w-3 h-3" /> },
-      ];
-    } else if (hour >= 11 && hour < 17) {
-      timeBased = [
-        { id: 'focus', label: 'Odaklan', icon: <Zap className="w-3 h-3" /> },
-        { id: 'lunch', label: 'Öğle', icon: <Utensils className="w-3 h-3" /> },
-      ];
-    } else {
-      timeBased = [
-        { id: 'social', label: 'Sohbet', icon: <MessageSquare className="w-3 h-3" /> },
-        { id: 'view', label: 'Manzara', icon: <Mountain className="w-3 h-3" /> },
-      ];
-    }
-    return [...timeBased, ...base];
-  }, [currentTime]);
+
+    return userNeeds;
+  }, []);
 
   const filteredCafes = useMemo(() => {
     let list = mapCafes;
     if (activeFilters.length > 0) {
       list = list.filter((cafe) =>
-        activeFilters.some((filterId) => {
-          const terms = CATEGORY_SEARCH_TERMS[filterId] || [];
+        activeFilters.every((filterId) => {
+          // Special mapping for common needs to specific cafe props
+          if (filterId === 'work' && (cafe.powerOutlets || (cafe.wifiSpeed && parseInt(cafe.wifiSpeed) >= 50))) return true;
+          if (filterId === 'focus' && cafe.noiseLevel === 'Sessiz') return true;
+          if (filterId === 'garden' && (cafe.hasGarden || cafe.amenities?.some(a => ['Outdoor', 'Garden', 'Bahçe'].includes(a)))) return true;
+
+          const terms = CATEGORY_SEARCH_TERMS[filterId] || [filterId];
           return terms.some(
             (term) =>
-              cafe.name.toLowerCase().includes(term) ||
-              cafe.description?.toLowerCase().includes(term) ||
-              cafe.amenities?.some((a) => a.toLowerCase().includes(term)) ||
-              cafe.moods?.some((m) => m.toLowerCase().includes(term))
+              cafe.name.toLowerCase().includes(term.toLowerCase()) ||
+              cafe.description?.toLowerCase().includes(term.toLowerCase()) ||
+              cafe.amenities?.some((a) => a.toLowerCase().includes(term.toLowerCase())) ||
+              cafe.moods?.some((m) => m.toLowerCase().includes(term.toLowerCase()))
           );
         })
       );
@@ -200,9 +194,7 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
     }
   }, [mapReady, circleCenter, selectedRadius, activeFilters]);
 
-  useEffect(() => {
-    handleSearch();
-  }, [selectedRadius, circleCenter.lat, circleCenter.lng]);
+  // Removed automatic search on radius/center change to respect user preference for manual search via button.
 
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<maplibregl.Map | null>(null);
