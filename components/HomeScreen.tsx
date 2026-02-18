@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, MapPin, Wallet, Star, Sparkles, Coffee, Check, Target, SlidersHorizontal, Loader2, ExternalLink, RefreshCw, Clock, ChevronDown, Radio, Laptop, Leaf, Wifi, Utensils, Zap, MessageSquare, Mountain, Moon, Briefcase, Plus, BookOpen, ArrowRight, User, Timer, Ticket, Map, ChevronLeft, Heart } from 'lucide-react';
 import { CAFES, CAMPAIGNS, EDITOR_PICKS } from '../data';
 import { Cafe, CafeCollection, EditorPick, Campaign } from '../types';
+import { fetchDiscoveryCafes } from '../services/places';
 
 interface HomeScreenProps {
   onSelectCafe: (cafe: Cafe) => void;
@@ -12,6 +13,8 @@ interface HomeScreenProps {
   userLocation: { lat: number, lng: number } | null;
 }
 
+const DEFAULT_CENTER = { lat: 40.991, lng: 29.027 }; // Kadıköy
+
 const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onSelectCollection, onSelectArticle, cafes, userLocation }) => {
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
@@ -19,6 +22,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
   const [selectedLocation, setSelectedLocation] = useState("Kadıköy, İstanbul");
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [claimedIds, setClaimedIds] = useState<string[]>([]);
+  const [discoveryCafes, setDiscoveryCafes] = useState<Cafe[]>([]);
+  const [discoveryLoading, setDiscoveryLoading] = useState(false);
 
   const lastFetchTimeRef = useRef<number>(0);
 
@@ -59,6 +64,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
     };
     fetchLocationName();
   }, [userLocation]);
+
+  useEffect(() => {
+    const center = userLocation || DEFAULT_CENTER;
+    setDiscoveryLoading(true);
+    fetchDiscoveryCafes(center.lat, center.lng, 2000)
+      .then((fetched) => setDiscoveryCafes(fetched))
+      .catch(() => setDiscoveryCafes([]))
+      .finally(() => setDiscoveryLoading(false));
+  }, [userLocation?.lat, userLocation?.lng]);
 
   useEffect(() => {
     const carouselInterval = setInterval(() => {
@@ -110,34 +124,39 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
     }, 1500);
   };
 
+  const baseCafes = discoveryCafes.length > 0 ? discoveryCafes : cafes;
+
   const nearbyCafes = useMemo(() => {
     const searchTerms: Record<string, string[]> = {
-      work: ['work', 'çalışma', 'laptop', 'priz', 'desk'],
-      view: ['manzara', 'deniz', 'teras', 'view'],
-      garden: ['bahçe', 'outdoor', 'terrace', 'açık hava'],
+      work: ['work', 'çalışma', 'laptop', 'priz', 'desk', 'coffee', 'kahve'],
+      view: ['manzara', 'deniz', 'teras', 'view', 'viewpoint'],
+      garden: ['bahçe', 'outdoor', 'terrace', 'açık hava', 'garden'],
       botanical: ['botanik', 'bitki', 'yeşil', 'plant', 'flora'],
       creative: ['creative', 'konsept', 'sanat', 'art', 'design', 'ilham', 'yaratıcılık'],
-      bosphorus: ['boğaz', 'bosphorus', 'deniz manzarası'],
+      bosphorus: ['boğaz', 'bosphorus', 'deniz manzarası', 'bebek', 'ortaköy'],
       breakfast: ['kahvaltı', 'brunch', 'yumurta'],
       filter: ['filtre', 'demleme', 'v60']
     };
 
-    return cafes.filter(cafe => {
+    return baseCafes.filter(cafe => {
       if (activeFilters.length === 0) return true;
 
       return activeFilters.every(filterId => {
-        if (filterId === 'work' && (cafe.powerOutlets || (cafe.wifiSpeed && parseInt(cafe.wifiSpeed) >= 50))) return true;
-        if (filterId === 'garden' && (cafe.hasGarden || cafe.amenities.some(a => ['Outdoor', 'Garden', 'Bahçe'].includes(a)))) return true;
+        if (filterId === 'work' && (cafe.powerOutlets || (cafe.wifiSpeed && parseInt(String(cafe.wifiSpeed)) >= 50))) return true;
+        if (filterId === 'garden' && (cafe.hasGarden || cafe.amenities?.some(a => ['Outdoor', 'Garden', 'Bahçe'].includes(a)))) return true;
 
         const terms = searchTerms[filterId] || [filterId];
-        return terms.some(term =>
-          cafe.description.toLowerCase().includes(term.toLowerCase()) ||
-          cafe.amenities.some(a => a.toLowerCase().includes(term.toLowerCase())) ||
-          cafe.moods.some(m => m.toLowerCase().includes(term.toLowerCase()))
-        );
+        const searchable = [
+          cafe.name,
+          cafe.address,
+          cafe.description || '',
+          ...(cafe.amenities || []),
+          ...(cafe.moods || [])
+        ].join(' ').toLowerCase();
+        return terms.some(term => searchable.includes(term.toLowerCase()));
       });
     });
-  }, [activeFilters, cafes]);
+  }, [activeFilters, baseCafes]);
 
   const featuredCafe = cafes[carouselIndex] || cafes[0];
   const getCafeData = (id: string) => cafes.find(c => c.id === id);
@@ -235,7 +254,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
 
         <div className="px-8 space-y-4 pt-2">
           <div className="flex gap-4 overflow-x-auto no-scrollbar pb-4">
-            {nearbyCafes.map(cafe => (
+            {discoveryLoading ? (
+              <>
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="relative w-48 aspect-[3/4] shrink-0 rounded-[2.5rem] overflow-hidden bg-gray-200/50 animate-pulse" />
+                ))}
+              </>
+            ) : (
+            nearbyCafes.map(cafe => (
               <div
                 key={cafe.id}
                 onClick={() => onSelectCafe(cafe)}
@@ -257,7 +283,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
                   <p className="text-[8px] text-white/60 font-bold uppercase tracking-widest">{cafe.distance}</p>
                 </div>
               </div>
-            ))}
+            ))
+            )}
           </div>
         </div>
 
