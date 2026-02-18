@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, MapPin, Wallet, Star, Sparkles, Coffee, Check, Target, SlidersHorizontal, Loader2, ExternalLink, RefreshCw, Clock, ChevronDown, Radio, Laptop, Leaf, Wifi, Utensils, Zap, MessageSquare, Mountain, Moon, Briefcase, Plus, BookOpen, ArrowRight, User, Timer, Ticket, Map, ChevronLeft, Heart } from 'lucide-react';
 import { CAFES, CAMPAIGNS, EDITOR_PICKS } from '../data';
-import { Cafe, CafeCollection, GroundingLink, EditorPick, Campaign } from '../types';
+import { Cafe, CafeCollection, EditorPick, Campaign } from '../types';
 
 interface HomeScreenProps {
   onSelectCafe: (cafe: Cafe) => void;
@@ -16,18 +16,48 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [selectedLocation, setSelectedLocation] = useState("Kadıköy, Moda");
+  const [selectedLocation, setSelectedLocation] = useState("Kadıköy, İstanbul");
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [claimedIds, setClaimedIds] = useState<string[]>([]);
 
-
+  const lastFetchTimeRef = useRef<number>(0);
 
   useEffect(() => {
-    if (userLocation) {
-      // In a real app we would reverse geocode here.
-      // For now, let's just indicate we are using the live device location
-      setSelectedLocation("Mevcut Konumun");
-    }
+    const fetchLocationName = async () => {
+      if (!userLocation) return;
+
+      const now = Date.now();
+      if (now - lastFetchTimeRef.current < 10000) return;
+      lastFetchTimeRef.current = now;
+
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${userLocation.lat}&lon=${userLocation.lng}`,
+          {
+            headers: {
+              'Accept-Language': 'tr-TR,tr;q=0.9',
+              'User-Agent': 'LocalCoffeeApp/1.0'
+            }
+          }
+        );
+        const data = await response.json();
+        if (data.address) {
+          const addr = data.address;
+          const province = addr.province || addr.city || addr.state || "";
+          if (province.includes("İstanbul")) {
+            const district = addr.suburb || addr.town || addr.district || addr.city_district || "İstanbul";
+            setSelectedLocation(`${district}, İstanbul`);
+          } else {
+            const city = addr.province || addr.city || addr.state || "Bilinmeyen Konum";
+            setSelectedLocation(city);
+          }
+        }
+      } catch (error) {
+        console.error("Reverse geocoding error:", error);
+        setSelectedLocation("Konum bulunamadı");
+      }
+    };
+    fetchLocationName();
   }, [userLocation]);
 
   useEffect(() => {
@@ -45,20 +75,25 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
     };
   }, [cafes.length]);
 
+  const isIstanbul = useMemo(() => {
+    const loc = selectedLocation.toLowerCase();
+    return loc.includes('istanbul') || ['kadıköy', 'moda', 'beşiktaş', 'üsküdar', 'galata', 'beyoğlu', 'şişli', 'ortaköy', 'bebek'].some(d => loc.includes(d)) ||
+      (selectedLocation === 'Mevcut Konumun' && userLocation && userLocation.lat >= 40.85 && userLocation.lat <= 41.25 && userLocation.lng >= 28.8 && userLocation.lng <= 29.5);
+  }, [selectedLocation, userLocation]);
+
   const dynamicShortcuts = useMemo(() => {
-    // User expectation-based filters
-    const userNeeds = [
+    const base = [
       { id: 'work', label: 'Çalışma', icon: <Briefcase className="w-3 h-3" /> },
       { id: 'view', label: 'Manzara', icon: <Mountain className="w-3 h-3" /> },
-      { id: 'focus', label: 'Odaklan', icon: <Zap className="w-3 h-3" /> },
-      { id: 'social', label: 'Sosyalleş', icon: <MessageSquare className="w-3 h-3" /> },
-      { id: 'garden', label: 'Bahçe Keyfi', icon: <Leaf className="w-3 h-3" /> },
-      { id: 'creative', label: 'İlham Al', icon: <Sparkles className="w-3 h-3" /> },
-      { id: 'date', label: 'Date', icon: <Heart className="w-3 h-3" /> }
+      { id: 'garden', label: 'Bahçe', icon: <Leaf className="w-3 h-3" /> },
+      { id: 'botanical', label: 'Botanik', icon: <Leaf className="w-3 h-3" /> },
+      { id: 'creative', label: 'Konsept', icon: <Sparkles className="w-3 h-3" /> }
     ];
-
-    return userNeeds;
-  }, []);
+    if (isIstanbul) {
+      base.push({ id: 'bosphorus', label: 'Boğaz', icon: <Mountain className="w-3 h-3" /> });
+    }
+    return base;
+  }, [isIstanbul]);
 
   const toggleFilter = (id: string) => {
     setActiveFilters(prev =>
@@ -78,12 +113,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
   const nearbyCafes = useMemo(() => {
     const searchTerms: Record<string, string[]> = {
       work: ['work', 'çalışma', 'laptop', 'priz', 'desk'],
-      view: ['manzara', 'deniz', 'teras', 'view', 'boğaz'],
-      focus: ['focus', 'sessiz', 'calm', 'quiet', 'huzur'],
-      social: ['social', 'sosyal', 'arkadaş', 'lively', 'sohbet'],
+      view: ['manzara', 'deniz', 'teras', 'view'],
       garden: ['bahçe', 'outdoor', 'terrace', 'açık hava'],
-      creative: ['creative', 'sanat', 'art', 'design', 'ilham', 'yaratıcılık'],
-      date: ['romantic', 'date', 'randevu', 'loş', 'şık', 'romantik'],
+      botanical: ['botanik', 'bitki', 'yeşil', 'plant', 'flora'],
+      creative: ['creative', 'konsept', 'sanat', 'art', 'design', 'ilham', 'yaratıcılık'],
+      bosphorus: ['boğaz', 'bosphorus', 'deniz manzarası'],
       breakfast: ['kahvaltı', 'brunch', 'yumurta'],
       filter: ['filtre', 'demleme', 'v60']
     };
@@ -92,12 +126,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
       if (activeFilters.length === 0) return true;
 
       return activeFilters.every(filterId => {
-        // Special mapping for common needs to specific cafe props
         if (filterId === 'work' && (cafe.powerOutlets || (cafe.wifiSpeed && parseInt(cafe.wifiSpeed) >= 50))) return true;
-        if (filterId === 'focus' && cafe.noiseLevel === 'Sessiz') return true;
         if (filterId === 'garden' && (cafe.hasGarden || cafe.amenities.some(a => ['Outdoor', 'Garden', 'Bahçe'].includes(a)))) return true;
 
-        // General term search for others
         const terms = searchTerms[filterId] || [filterId];
         return terms.some(term =>
           cafe.description.toLowerCase().includes(term.toLowerCase()) ||
@@ -164,19 +195,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
         </div>
 
         <div className="px-8 flex items-center gap-2">
-          <button
-            onClick={() => {
-              const loc = prompt("Şehir/Bölge girin:", selectedLocation);
-              if (loc) setSelectedLocation(loc);
-            }}
-            className="flex-1 flex items-center justify-between bg-white/40 backdrop-blur-xl border border-white/60 px-4 py-3 rounded-[1.4rem] shadow-sm active:scale-[0.98] transition-all overflow-hidden"
-          >
+          <div className="flex-1 flex items-center justify-between bg-white/40 backdrop-blur-xl border border-white/60 px-4 py-3 rounded-[1.4rem] shadow-sm active:scale-[0.98] transition-all overflow-hidden cursor-default">
             <div className="flex items-center gap-1.5 min-w-0">
               <MapPin className="w-3 h-3 text-[#BC4749] shrink-0" />
               <span className="text-[10px] font-bold text-[#1B4332] truncate uppercase tracking-tighter">{selectedLocation}</span>
             </div>
-            <ChevronDown className="w-2.5 h-2.5 text-gray-300 shrink-0 ml-1" />
-          </button>
+            <div className="w-2.5 h-2.5 shrink-0 ml-1" />
+          </div>
 
           <div className="bg-white/40 backdrop-blur-xl border border-white/60 px-3 py-3 rounded-[1.4rem] shadow-sm flex items-center gap-1.5 shrink-0">
             <Clock className="w-3 h-3 text-[#1B4332]/30" />
@@ -199,9 +224,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
               className={`shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-[1.2rem] border transition-all font-bold text-[10px] uppercase tracking-tighter active:scale-95 ${activeFilters.includes(filter.id)
                 ? 'bg-[#1B4332] border-[#1B4332] text-white shadow-lg'
                 : 'bg-white/60 backdrop-blur-md border-white/80 text-[#1B4332]'
-                }`}
+                } `}
             >
-              <span className={`${activeFilters.includes(filter.id) ? 'text-white' : 'text-[#BC4749]'}`}>{filter.icon}</span>
+              <span className={`${activeFilters.includes(filter.id) ? 'text-white' : 'text-[#BC4749]'} `}>{filter.icon}</span>
               {filter.label}
               {activeFilters.includes(filter.id) && <Plus className="w-2.5 h-2.5 ml-0.5 rotate-45" />}
             </button>
@@ -317,7 +342,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
                 onClick={() => onSelectArticle(pick)}
                 className="relative w-80 shrink-0 bg-white/40 backdrop-blur-xl rounded-[3rem] overflow-hidden border border-white/60 shadow-xl group cursor-pointer active:scale-[0.98] transition-all"
               >
-
                 <div className="h-56 w-full relative">
                   <img src={pick.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-[2s]" alt={pick.title} />
                   <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-black/20" />

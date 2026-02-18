@@ -149,7 +149,7 @@ export const CAMPAIGNS: Campaign[] = [
 export const COLLECTIONS: CafeCollection[] = [
   {
     id: 'dyn1',
-    title: 'Teras & Manzara',
+    title: 'Manzara',
     description: 'Şehrin kaosundan uzaklaşıp gün batımını izleyebileceğiniz en iyi noktalar.',
     images: [
       'https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?q=80&w=2070&auto=format&fit=crop',
@@ -158,28 +158,45 @@ export const COLLECTIONS: CafeCollection[] = [
     ],
     cafeIds: ['2', '4'],
     type: 'DYNAMIC',
-    tag: 'GÖKYÜZÜ ☁️',
+    tag: 'MANZARA',
     sentiment: 'En Çok Övülen: Gün Batımı',
     ratingSummary: '4.9 Ort.'
   },
   {
     id: 'dyn2',
-    title: 'Gizli Bahçeler',
+    title: 'Bahçe',
     description: 'Betonların arasında yeşile ve sessizliğe doyacağınız vahalar.',
     images: [
       'https://images.unsplash.com/photo-1509042239860-f550ce710b93?q=80&w=1974&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1584852335804-94c6f9273c5d?q=80&w=2070&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1442512595331-e89e73853f31?q=80&w=2070&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=1974&auto=format&fit=crop'
     ],
+
     cafeIds: ['1', '3'],
     type: 'DYNAMIC',
-    tag: 'BOTANİK 🌿',
+    tag: 'BAHÇE',
     sentiment: 'En Çok Övülen: Huzur',
     ratingSummary: '4.7 Ort.'
   },
   {
     id: 'dyn3',
-    title: 'Fütüristik Design',
+    title: 'Botanik',
+    description: 'Bitkilerle çevrili, doğayla iç içe kahve durakları.',
+    images: [
+      'https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=2070&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=1974&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1509042239860-f550ce710b93?q=80&w=1974&auto=format&fit=crop'
+    ],
+
+    cafeIds: ['1', '2'],
+    type: 'DYNAMIC',
+    tag: 'BOTANİK',
+    sentiment: 'En Çok Övülen: Yeşillik',
+    ratingSummary: '4.8 Ort.'
+  },
+  {
+    id: 'dyn4',
+    title: 'Konsept',
     description: 'Neon ışıklar, metalik yüzeyler ve geleceğin kahve deneyimi.',
     images: [
       'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=2070&auto=format&fit=crop',
@@ -188,24 +205,40 @@ export const COLLECTIONS: CafeCollection[] = [
     ],
     cafeIds: ['4', '5'],
     type: 'DYNAMIC',
-    tag: 'CONCEPT 🚀',
+    tag: 'KONSEPT',
     sentiment: 'En Çok Övülen: Atmosfer',
     ratingSummary: '4.8 Ort.'
   },
   {
-    id: 'dyn4',
-    title: 'Tatlı Krizleri',
-    description: 'Sadece kahvesiyle değil, vitrinindeki sanat eserleriyle büyüleyenler.',
+    id: 'dyn5',
+    title: 'Çalışma',
+    description: 'Priz, hızlı wifi ve odaklanmak için ideal mekanlar.',
     images: [
-      'https://images.unsplash.com/photo-1579372786545-ea65448d2b30?q=80&w=1974&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1551024601-564d6e683550?q=80&w=1965&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1488477181946-6428a029177b?q=80&w=1974&auto=format&fit=crop'
+      'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=2070&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=2069&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1517502884422-41e157d44305?q=80&w=2064&auto=format&fit=crop'
+    ],
+    cafeIds: ['1', '3'],
+    type: 'DYNAMIC',
+    tag: 'ÇALIŞMA',
+    sentiment: 'En Çok Övülen: Odaklanma',
+    ratingSummary: '4.7 Ort.'
+  },
+  {
+    id: 'dyn6',
+    title: 'Boğaz',
+    description: 'Boğaz manzaralı, martı sesleri eşliğinde kahve keyfi.',
+    images: [
+      'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?q=80&w=1974&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?q=80&w=2070&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1600093463592-8e36ae95ef56?q=80&w=2070&auto=format&fit=crop'
     ],
     cafeIds: ['2', '4'],
     type: 'DYNAMIC',
-    tag: 'LEZZET 🍰',
-    sentiment: 'En Çok Övülen: San Sebastian',
-    ratingSummary: '4.9 Ort.'
+    tag: 'BOĞAZ',
+    sentiment: 'En Çok Övülen: Manzara',
+    ratingSummary: '4.9 Ort.',
+    city: 'İstanbul'
   }
 ];
 

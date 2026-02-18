@@ -4,10 +4,12 @@ import { ChevronLeft, Settings, QrCode, Star, Coffee, ChevronRight, Award, Shiel
 import { CAFES } from '../data';
 import { Cafe } from '../types';
 import { summarizeDailyJourney } from '../services/gemini';
+import ProfileJourneyMap, { JourneyPin } from './ProfileJourneyMap';
 
 interface ProfileScreenProps {
   onBack: () => void;
   cafes: Cafe[];
+  userLocation: { lat: number; lng: number } | null;
 }
 
 const StarIcon: React.FC<{ filled: boolean }> = ({ filled }) => (
@@ -19,17 +21,21 @@ const StarIcon: React.FC<{ filled: boolean }> = ({ filled }) => (
   </div>
 );
 
-const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack, cafes }) => {
+const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack, cafes, userLocation }) => {
   const [isScanning, setIsScanning] = useState(false);
   const [scanSuccess, setScanSuccess] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<any | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
+  const [journeyPins, setJourneyPins] = useState<JourneyPin[]>([]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
   const joinedCafes = cafes.filter(c => c.isJoined);
+  const joinedCafeCoords = joinedCafes
+    .filter((c) => c.coordinates)
+    .map((c) => ({ lat: c.coordinates!.lat, lng: c.coordinates!.lng }));
 
   useEffect(() => {
     const getAnalysis = async () => {
@@ -157,10 +163,21 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack, cafes }) => {
                   <ArrowRight className="w-5 h-5 text-white" />
                 </div>
               )}
+
             </div>
           ) : (
             <p className="text-[10px] text-white/30 text-center py-4">Henüz günlük yolculuk verisi yok.</p>
           )}
+
+          {/* Harita - her zaman göster */}
+          <div className="mt-4">
+            <ProfileJourneyMap
+              userLocation={userLocation}
+              pins={journeyPins}
+              onPinsChange={setJourneyPins}
+              joinedCafeCoords={joinedCafeCoords}
+            />
+          </div>
         </div>
       </div>
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Navigation, Navigation2, Star, Briefcase, Leaf, Utensils, Coffee, Zap, MessageSquare, Mountain, Plus, Search, MapPin, Wifi, Clock, ChevronDown, Radio, Sparkles, Heart } from 'lucide-react';
+import { Navigation, Navigation2, Star, Briefcase, Leaf, Utensils, Coffee, Mountain, Plus, Search, MapPin, Wifi, Clock, ChevronDown, Radio, Sparkles } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
 import Supercluster from 'supercluster';
 import { Cafe, MapState } from '../types';
@@ -7,12 +7,11 @@ import { fetchNearbyCafesFromPlaces } from '../services/places';
 
 const CATEGORY_SEARCH_TERMS: Record<string, string[]> = {
   work: ['work', 'çalışma', 'laptop', 'priz', 'desk'],
-  view: ['manzara', 'deniz', 'teras', 'view', 'boğaz'],
-  focus: ['focus', 'sessiz', 'calm', 'quiet', 'huzur'],
-  social: ['social', 'sosyal', 'arkadaş', 'lively', 'sohbet'],
+  view: ['manzara', 'deniz', 'teras', 'view'],
   garden: ['bahçe', 'outdoor', 'terrace', 'açık hava'],
-  creative: ['creative', 'sanat', 'art', 'design', 'ilham', 'yaratıcılık'],
-  date: ['romantic', 'date', 'randevu', 'loş', 'şık', 'romantik'],
+  botanical: ['botanik', 'bitki', 'yeşil', 'plant', 'flora'],
+  creative: ['creative', 'konsept', 'sanat', 'art', 'design', 'ilham', 'yaratıcılık'],
+  bosphorus: ['boğaz', 'bosphorus', 'deniz manzarası'],
   breakfast: ['kahvaltı', 'brunch', 'yumurta'],
   filter: ['filtre', 'demleme', 'v60']
 };
@@ -68,13 +67,17 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
   const [mapCafes, setMapCafes] = useState<Cafe[]>(() => initialMapState?.mapCafes ?? []);
   const [mapReady, setMapReady] = useState(false);
   const [activeFilters, setActiveFilters] = useState<string[]>(() => initialMapState?.activeFilters ?? []);
-  const [selectedRadius, setSelectedRadius] = useState<number | null>(() => initialMapState?.selectedRadius ?? 1000);
+  const [selectedRadius, setSelectedRadius] = useState<number | null>(() => initialMapState?.selectedRadius ?? 500);
   const [searchQuery, setSearchQuery] = useState(() => initialMapState?.searchQuery ?? '');
   const [pinModeActive, setPinModeActive] = useState(false);
   const [hasPinBeenPlaced, setHasPinBeenPlaced] = useState(() => initialMapState?.hasPinBeenPlaced ?? false);
   const [currentTime] = useState(() => new Date());
   const [isLoading, setIsLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(() => initialMapState?.searchError ?? null);
+  const [initialSearchDone, setInitialSearchDone] = useState(false);
+  const [isNudging, setIsNudging] = useState(false);
+
+
 
   const routeMarkerRef = useRef<maplibregl.Marker | null>(null);
   const pinMarkerRef = useRef<maplibregl.Marker | null>(null);
@@ -105,20 +108,25 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
 
   const circleCenter = hasPinBeenPlaced ? pinLocation : userLocation;
 
+  const isIstanbul = useMemo(() => {
+    const lat = circleCenter.lat;
+    const lng = circleCenter.lng;
+    return lat >= 40.85 && lat <= 41.25 && lng >= 28.8 && lng <= 29.5;
+  }, [circleCenter.lat, circleCenter.lng]);
+
   const categoryShortcuts = useMemo(() => {
-    // User expectation-based filters
-    const userNeeds = [
+    const base = [
       { id: 'work', label: 'Çalışma', icon: <Briefcase className="w-3 h-3" /> },
       { id: 'view', label: 'Manzara', icon: <Mountain className="w-3 h-3" /> },
-      { id: 'focus', label: 'Odaklan', icon: <Zap className="w-3 h-3" /> },
-      { id: 'social', label: 'Sosyalleş', icon: <MessageSquare className="w-3 h-3" /> },
-      { id: 'garden', label: 'Bahçe Keyfi', icon: <Leaf className="w-3 h-3" /> },
-      { id: 'creative', label: 'İlham Al', icon: <Sparkles className="w-3 h-3" /> },
-      { id: 'date', label: 'Date', icon: <Heart className="w-3 h-3" /> }
+      { id: 'garden', label: 'Bahçe', icon: <Leaf className="w-3 h-3" /> },
+      { id: 'botanical', label: 'Botanik', icon: <Leaf className="w-3 h-3" /> },
+      { id: 'creative', label: 'Konsept', icon: <Sparkles className="w-3 h-3" /> }
     ];
-
-    return userNeeds;
-  }, []);
+    if (isIstanbul) {
+      base.push({ id: 'bosphorus', label: 'Boğaz', icon: <Mountain className="w-3 h-3" /> });
+    }
+    return base;
+  }, [isIstanbul]);
 
   const filteredCafes = useMemo(() => {
     let list = mapCafes;
@@ -127,7 +135,6 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
         activeFilters.every((filterId) => {
           // Special mapping for common needs to specific cafe props
           if (filterId === 'work' && (cafe.powerOutlets || (cafe.wifiSpeed && parseInt(cafe.wifiSpeed) >= 50))) return true;
-          if (filterId === 'focus' && cafe.noiseLevel === 'Sessiz') return true;
           if (filterId === 'garden' && (cafe.hasGarden || cafe.amenities?.some(a => ['Outdoor', 'Garden', 'Bahçe'].includes(a)))) return true;
 
           const terms = CATEGORY_SEARCH_TERMS[filterId] || [filterId];
@@ -194,7 +201,53 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
     }
   }, [mapReady, circleCenter, selectedRadius, activeFilters]);
 
-  // Removed automatic search on radius/center change to respect user preference for manual search via button.
+  useEffect(() => {
+    if (mapReady && circleCenter && !initialSearchDone && !isLoading) {
+      setInitialSearchDone(true);
+      handleSearch();
+    }
+  }, [mapReady, circleCenter.lat, circleCenter.lng, handleSearch, initialSearchDone, isLoading]);
+
+  useEffect(() => {
+    if (!mapReady || !selectedRadius) return;
+    const map = mapInstance.current;
+    if (map && map.isStyleLoaded()) {
+      const lat = circleCenter.lat;
+      const lng = circleCenter.lng;
+      const radiusMeters = selectedRadius;
+      const latRadian = lat * (Math.PI / 180);
+      const degLat = radiusMeters / 111319.9;
+      const degLng = radiusMeters / (111319.9 * Math.cos(latRadian));
+
+      const bounds = new maplibregl.LngLatBounds(
+        [lng - degLng, lat - degLat],
+        [lng + degLng, lat + degLat]
+      );
+
+      // Delay fitBounds slightly so the user sees the circle grow/shrink first
+      const timer = setTimeout(() => {
+        if (map.isStyleLoaded()) {
+          map.fitBounds(bounds, {
+            padding: 80,
+            duration: 1200,
+            essential: true
+          });
+        }
+      }, 400);
+
+      return () => clearTimeout(timer);
+    }
+  }, [selectedRadius, circleCenter.lat, circleCenter.lng, mapReady]);
+
+  useEffect(() => {
+    if (mapCafes.length > 0) {
+      setIsNudging(true);
+      const timer = setTimeout(() => setIsNudging(false), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [mapCafes]);
+
+
 
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<maplibregl.Map | null>(null);
@@ -203,14 +256,24 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
 
   const renderMarkers = useCallback(() => {
     const map = mapInstance.current;
-    if (!map || !clusterIndex.current || !map.isStyleLoaded()) return;
+    if (!map || !map.isStyleLoaded()) return;
 
-    const bounds = map.getBounds();
-    const zoom = Math.floor(map.getZoom());
-    const clusters = clusterIndex.current.getClusters(
-      [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()],
-      zoom
-    );
+    let clusters: any[] = [];
+    if (selectedRadius === 2000 && clusterIndex.current) {
+      const bounds = map.getBounds();
+      const zoom = Math.floor(map.getZoom());
+      clusters = clusterIndex.current.getClusters(
+        [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()],
+        zoom
+      );
+    } else {
+      clusters = filteredCafes.map(cafe => ({
+        type: 'Feature' as const,
+        properties: { cluster: false, cafeId: cafe.id, rating: cafe.rating },
+        geometry: { type: 'Point' as const, coordinates: [cafe.coordinates.lng, cafe.coordinates.lat] as [number, number] }
+      }));
+    }
+
 
     markersRef.current.forEach(m => m.remove());
     markersRef.current = [];
@@ -261,7 +324,7 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
       const marker = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
       markersRef.current.push(marker);
     });
-  }, [onSelectCafe, filteredCafes]);
+  }, [onSelectCafe, filteredCafes, selectedRadius]);
 
   useEffect(() => {
     if (!mapContainer.current) return;
@@ -271,7 +334,8 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
       container: mapContainer.current,
       style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
       center: [initialCenter.lng, initialCenter.lat],
-      zoom: 15,
+      zoom: 14.5,
+
       attributionControl: false,
     });
 
@@ -367,7 +431,8 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
       properties: { cluster: false, cafeId: cafe.id, rating: cafe.rating },
       geometry: { type: 'Point' as const, coordinates: [cafe.coordinates.lng, cafe.coordinates.lat] as [number, number] }
     }));
-    clusterIndex.current = new Supercluster({ radius: 60, maxZoom: 16 }).load(points);
+    clusterIndex.current = new Supercluster({ radius: 40, maxZoom: 16 }).load(points);
+
     renderMarkers();
   }, [filteredCafes, mapReady, renderMarkers]);
 
@@ -393,7 +458,8 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
         id: CIRCLE_FILL_LAYER_ID,
         type: 'fill',
         source: CIRCLE_SOURCE_ID,
-        paint: { 'fill-color': '#BC4749', 'fill-opacity': 0.12 },
+        paint: { 'fill-color': '#BC4749', 'fill-opacity': 0.15 },
+
       });
       map.addLayer({
         id: CIRCLE_LINE_LAYER_ID,
@@ -599,7 +665,8 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
         <MapPin className="w-5 h-5" />
       </button>
 
-      <div className={`absolute left-0 right-0 bottom-0 bg-white/95 backdrop-blur-2xl rounded-t-[3.5rem] shadow-[0_-20px_50px_rgba(0,0,0,0.1)] transition-all duration-500 z-30 overflow-hidden ${isPanelExpanded ? 'h-[85%]' : 'h-[280px]'}`}>
+      <div className={`absolute left-0 right-0 bottom-0 bg-white/95 backdrop-blur-2xl rounded-t-[3.5rem] shadow-[0_-20px_50px_rgba(0,0,0,0.1)] transition-all duration-500 z-30 overflow-hidden ${isPanelExpanded ? 'h-[85%]' : 'h-[280px]'} ${isNudging ? 'animate-bump' : ''}`}>
+
         <div className="w-full pt-6 pb-2 flex flex-col items-center cursor-pointer" onClick={() => setIsPanelExpanded(!isPanelExpanded)}>
           <div className="w-16 h-1.5 bg-[#1B4332]/10 rounded-full" />
         </div>

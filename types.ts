@@ -57,6 +57,7 @@ export interface CafeCollection {
   tag?: string;
   sentiment?: string; // e.g. "En çok övülen: Manzara"
   ratingSummary?: string; // e.g. "4.8 Ort."
+  city?: string; // e.g. "İstanbul" - sadece bu şehir seçiliyken göster
 }
 
 export interface EditorPick {

@@ -59,3 +59,20 @@ body {
 .animate-page-in {
   animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+
+@keyframes bump {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-30px);
+  }
+}
+
+.animate-bump {
+  animation: bump 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}

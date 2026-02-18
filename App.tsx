@@ -27,21 +27,32 @@ const App: React.FC = () => {
   const [lastMapState, setLastMapState] = useState<MapState | null>(null);
 
   React.useEffect(() => {
+    let watchId: number;
     if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
+      watchId = navigator.geolocation.watchPosition(
         (position) => {
+          console.log("[App] Location update:", position.coords.latitude, position.coords.longitude);
           setUserLocation({
             lat: position.coords.latitude,
             lng: position.coords.longitude
           });
         },
+
         (error) => {
           console.error("Location error:", error);
-          // Fallback to default if needed, or just stay as null
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 0
         }
       );
     }
+    return () => {
+      if (watchId !== undefined) navigator.geolocation.clearWatch(watchId);
+    };
   }, []);
+
 
   const handleLogin = () => {
     setIsAuthenticated(true);
@@ -97,6 +108,7 @@ const App: React.FC = () => {
           onSelectCollection={navigateToCollection}
           onSelectArticle={navigateToArticle}
           cafes={cafes}
+          userLocation={userLocation}
         />;
       case 'MAP':
         return (
@@ -125,7 +137,7 @@ const App: React.FC = () => {
           />
         );
       case 'PROFILE':
-        return <ProfileScreen cafes={cafes} onBack={() => setCurrentScreen('HOME')} />;
+        return <ProfileScreen cafes={cafes} onBack={() => setCurrentScreen('HOME')} userLocation={userLocation} />;
       case 'COLLECTION_DETAIL':
         return activeCollection ? (
           <GroupDetailScreen
@@ -153,7 +165,9 @@ const App: React.FC = () => {
           onSelectCafe={navigateToDetail}
           onOpenWallet={() => setCurrentScreen('PROFILE')}
           onSelectCollection={navigateToCollection}
+          onSelectArticle={navigateToArticle}
           cafes={cafes}
+          userLocation={userLocation}
         />;
     }
   };

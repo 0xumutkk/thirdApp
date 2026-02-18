@@ -10,10 +10,13 @@ interface FavoritesScreenProps {
 }
 
 const FavoritesScreen: React.FC<FavoritesScreenProps> = ({ onSelectCafe, onSelectCollection, cafes }) => {
-  const favoriteCafes = (cafes && cafes.length > 0) ? cafes : CAFES.filter(c => c.rating >= 4.7);
-  const dynamicCollections = COLLECTIONS.filter(c => c.type === 'DYNAMIC');
-
   const [currentLocation, setCurrentLocation] = useState("İstanbul");
+  const favoriteCafes = (cafes && cafes.length > 0) ? cafes : CAFES.filter(c => c.rating >= 4.7);
+  const dynamicCollections = COLLECTIONS.filter(c => {
+    if (c.type !== 'DYNAMIC') return false;
+    if (c.city && c.city !== currentLocation) return false;
+    return true;
+  });
   const [activeCollectionId, setActiveCollectionId] = useState(dynamicCollections[0]?.id ?? '');
   const [isPaused, setIsPaused] = useState(false);
   const [showSpotlightView, setShowSpotlightView] = useState(false);
@@ -21,6 +24,13 @@ const FavoritesScreen: React.FC<FavoritesScreenProps> = ({ onSelectCafe, onSelec
 
   const activeCollection = dynamicCollections.find(c => c.id === activeCollectionId) || dynamicCollections[0];
   const activeCollectionIndex = dynamicCollections.findIndex(c => c.id === activeCollectionId);
+
+  useEffect(() => {
+    const stillExists = dynamicCollections.some(c => c.id === activeCollectionId);
+    if (!stillExists && dynamicCollections.length > 0) {
+      setActiveCollectionId(dynamicCollections[0].id);
+    }
+  }, [currentLocation, dynamicCollections, activeCollectionId]);
 
   useEffect(() => {
     if (isPaused) return;
