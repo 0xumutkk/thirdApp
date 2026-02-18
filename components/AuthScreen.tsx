@@ -16,7 +16,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
       <div className="mt-20 flex flex-col items-center text-center relative z-10">
         <div className="w-64 h-64 flex items-center justify-center mb-6 animate-bounce-slow">
           <img
-            src="/assets/logo.png"
+            src="/assets/logo.svg"
             alt="Loca Logo"
             className="w-full h-full object-contain"
           />
