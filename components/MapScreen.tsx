@@ -3,7 +3,7 @@ import { Navigation, Navigation2, Star, Briefcase, Leaf, Utensils, Coffee, Mount
 import maplibregl from 'maplibre-gl';
 import Supercluster from 'supercluster';
 import { Cafe, MapState } from '../types';
-import { fetchNearbyCafesFromPlaces } from '../services/places';
+import { fetchNearbyCafesFromPlaces, haversineDistanceMeters } from '../services/places';
 
 const CATEGORY_SEARCH_TERMS: Record<string, string[]> = {
   work: ['work', 'çalışma', 'laptop', 'priz', 'desk'],
@@ -65,6 +65,16 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
   const [pinLocation, setPinLocation] = useState<{ lat: number, lng: number }>(() => initialMapState?.pinLocation ?? defaultCenter);
   const [isPanelExpanded, setIsPanelExpanded] = useState(false);
   const [mapCafes, setMapCafes] = useState<Cafe[]>(() => initialMapState?.mapCafes ?? []);
+  const [allFetchedCafes, setAllFetchedCafes] = useState<Cafe[]>(() => initialMapState?.mapCafes ?? []);
+  const lastSearchRef = useRef<{ lat: number; lng: number; radius: number } | null>(
+    initialMapState?.mapCafes?.length && initialMapState?.selectedRadius
+      ? {
+          lat: (initialMapState.hasPinBeenPlaced ? initialMapState.pinLocation : initialMapState.userLocation).lat,
+          lng: (initialMapState.hasPinBeenPlaced ? initialMapState.pinLocation : initialMapState.userLocation).lng,
+          radius: initialMapState.selectedRadius,
+        }
+      : null
+  );
   const [mapReady, setMapReady] = useState(false);
   const [activeFilters, setActiveFilters] = useState<string[]>(() => initialMapState?.activeFilters ?? []);
   const [selectedRadius, setSelectedRadius] = useState<number | null>(() => initialMapState?.selectedRadius ?? 500);
@@ -171,8 +181,24 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
     }
   }, [propUserLocation]);
 
+  const filterByRadius = useCallback((cafes: Cafe[], center: { lat: number; lng: number }, radiusM: number) =>
+    cafes.filter(c => {
+      const dist = haversineDistanceMeters(center.lat, center.lng, c.coordinates.lat, c.coordinates.lng);
+      return dist <= radiusM;
+    }), []);
+
   const handleSearch = useCallback(async () => {
     if (!mapReady || !circleCenter || selectedRadius === null) return;
+
+    const last = lastSearchRef.current;
+    const sameCenter = last && Math.abs(last.lat - circleCenter.lat) < 1e-5 && Math.abs(last.lng - circleCenter.lng) < 1e-5;
+
+    if (sameCenter && selectedRadius <= last.radius && allFetchedCafes.length > 0) {
+      const filtered = filterByRadius(allFetchedCafes, circleCenter, selectedRadius);
+      setMapCafes(filtered);
+      setSearchError(filtered.length === 0 ? "Bu yarıçapta mekan bulunamadı." : null);
+      return;
+    }
 
     setIsLoading(true);
     setSearchError(null);
@@ -189,6 +215,8 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
         selectedRadius,
         keyword || undefined
       );
+      lastSearchRef.current = { lat: circleCenter.lat, lng: circleCenter.lng, radius: selectedRadius };
+      setAllFetchedCafes(results);
       setMapCafes(results);
       if (results.length === 0) {
         setSearchError("Bu bölgede uygun mekan bulunamadı.");
@@ -199,7 +227,7 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
     } finally {
       setIsLoading(false);
     }
-  }, [mapReady, circleCenter, selectedRadius, activeFilters]);
+  }, [mapReady, circleCenter, selectedRadius, activeFilters, allFetchedCafes.length, filterByRadius]);
 
   useEffect(() => {
     if (mapReady && circleCenter && !initialSearchDone && !isLoading) {
@@ -207,6 +235,20 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
       handleSearch();
     }
   }, [mapReady, circleCenter.lat, circleCenter.lng, handleSearch, initialSearchDone, isLoading]);
+
+  useEffect(() => {
+    if (!circleCenter || selectedRadius === null) return;
+    const last = lastSearchRef.current;
+    const sameCenter = last && Math.abs(last.lat - circleCenter.lat) < 1e-5 && Math.abs(last.lng - circleCenter.lng) < 1e-5;
+
+    if (sameCenter && allFetchedCafes.length > 0 && selectedRadius <= last!.radius) {
+      const filtered = filterByRadius(allFetchedCafes, circleCenter, selectedRadius);
+      setMapCafes(filtered);
+      setSearchError(filtered.length === 0 ? "Bu yarıçapta mekan bulunamadı." : null);
+    } else if (sameCenter && selectedRadius > (last?.radius ?? 0) && !isLoading) {
+      handleSearch();
+    }
+  }, [selectedRadius, circleCenter.lat, circleCenter.lng, allFetchedCafes, filterByRadius, handleSearch, isLoading]);
 
   useEffect(() => {
     if (!mapReady || !selectedRadius) return;
