@@ -101,6 +101,48 @@ export const CAFES: Cafe[] = [
     noiseLevel: 'Sessiz',
     moods: ['Calm', 'Focus'],
     coordinates: { lat: 40.9912, lng: 29.0285 }
+  },
+  {
+    id: '6',
+    name: 'Bebek Kahve',
+    distance: '5.2km',
+    rating: 4.9,
+    reviews: 312,
+    image: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?q=80&w=1974&auto=format&fit=crop',
+    amenities: ['WiFi', 'Outdoor', 'Sea View'],
+    address: 'Bebek Sahil Yolu No:42',
+    description: 'Boğaz kıyısında gün batımını izleyebileceğiniz, martı sesleri eşliğinde kahve keyfi.',
+    isJoined: false,
+    stamps: 0,
+    maxStamps: 10,
+    points: 0,
+    wifiSpeed: '45 Mbps',
+    powerOutlets: true,
+    noiseLevel: 'Orta',
+    moods: ['Calm', 'Social'],
+    hasGarden: true,
+    coordinates: { lat: 41.0770, lng: 29.0430 }
+  },
+  {
+    id: '7',
+    name: 'Ortaköy Teras',
+    distance: '6.1km',
+    rating: 4.8,
+    reviews: 189,
+    image: 'https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?q=80&w=2070&auto=format&fit=crop',
+    amenities: ['WiFi', 'Outdoor', 'Terrace', 'Sea View'],
+    address: 'Ortaköy Meydanı Sk. No:8',
+    description: 'Boğaz Köprüsü manzaralı terasında kahve ve tatlı keyfi. Gün batımında eşsiz.',
+    isJoined: false,
+    stamps: 0,
+    maxStamps: 10,
+    points: 0,
+    wifiSpeed: '30 Mbps',
+    powerOutlets: true,
+    noiseLevel: 'Canlı',
+    moods: ['Social', 'Creative'],
+    hasGarden: true,
+    coordinates: { lat: 41.0555, lng: 29.0265 }
   }
 ];
 
@@ -156,7 +198,7 @@ export const COLLECTIONS: CafeCollection[] = [
       'https://images.unsplash.com/photo-1625244724120-1fd1d34d00f6?q=80&w=2070&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1600093463592-8e36ae95ef56?q=80&w=2070&auto=format&fit=crop'
     ],
-    cafeIds: ['2', '4'],
+    cafeIds: ['2', '4', '6', '7'],
     type: 'DYNAMIC',
     tag: 'MANZARA',
     sentiment: 'En Çok Övülen: Gün Batımı',
@@ -171,12 +213,11 @@ export const COLLECTIONS: CafeCollection[] = [
       'https://images.unsplash.com/photo-1442512595331-e89e73853f31?q=80&w=2070&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=1974&auto=format&fit=crop'
     ],
-
-    cafeIds: ['1', '3'],
+    cafeIds: ['1', '2', '6', '7'],
     type: 'DYNAMIC',
     tag: 'BAHÇE',
     sentiment: 'En Çok Övülen: Huzur',
-    ratingSummary: '4.7 Ort.'
+    ratingSummary: '4.8 Ort.'
   },
   {
     id: 'dyn3',
@@ -187,27 +228,26 @@ export const COLLECTIONS: CafeCollection[] = [
       'https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=1974&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1509042239860-f550ce710b93?q=80&w=1974&auto=format&fit=crop'
     ],
-
-    cafeIds: ['1', '2'],
+    cafeIds: ['1', '2', '5'],
     type: 'DYNAMIC',
     tag: 'BOTANİK',
     sentiment: 'En Çok Övülen: Yeşillik',
-    ratingSummary: '4.8 Ort.'
+    ratingSummary: '4.7 Ort.'
   },
   {
     id: 'dyn4',
     title: 'Konsept',
-    description: 'Neon ışıklar, metalik yüzeyler ve geleceğin kahve deneyimi.',
+    description: 'Vinyl, sanat ve özgün atmosferiyle fark yaratan mekanlar.',
     images: [
       'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=2070&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=2069&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1453614512568-c4024d13c247?q=80&w=2000&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1517502884422-41e157d44305?q=80&w=2064&auto=format&fit=crop'
     ],
-    cafeIds: ['4', '5'],
+    cafeIds: ['3', '4', '5'],
     type: 'DYNAMIC',
     tag: 'KONSEPT',
     sentiment: 'En Çok Övülen: Atmosfer',
-    ratingSummary: '4.8 Ort.'
+    ratingSummary: '4.7 Ort.'
   },
   {
     id: 'dyn5',
@@ -218,11 +258,11 @@ export const COLLECTIONS: CafeCollection[] = [
       'https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=2069&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1517502884422-41e157d44305?q=80&w=2064&auto=format&fit=crop'
     ],
-    cafeIds: ['1', '3'],
+    cafeIds: ['1', '3', '6'],
     type: 'DYNAMIC',
     tag: 'ÇALIŞMA',
     sentiment: 'En Çok Övülen: Odaklanma',
-    ratingSummary: '4.7 Ort.'
+    ratingSummary: '4.8 Ort.'
   },
   {
     id: 'dyn6',
@@ -233,7 +273,7 @@ export const COLLECTIONS: CafeCollection[] = [
       'https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?q=80&w=2070&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1600093463592-8e36ae95ef56?q=80&w=2070&auto=format&fit=crop'
     ],
-    cafeIds: ['2', '4'],
+    cafeIds: ['6', '7'],
     type: 'DYNAMIC',
     tag: 'BOĞAZ',
     sentiment: 'En Çok Övülen: Manzara',

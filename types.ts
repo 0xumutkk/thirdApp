@@ -31,6 +31,7 @@ export interface Cafe {
     lng: number;
   };
   groundingLinks?: GroundingLink[];
+  placeTypes?: string[];
 }
 
 export interface Campaign {

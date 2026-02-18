@@ -93,6 +93,7 @@ function placeResultToCafe(
     points: 0,
     moods: [],
     coordinates: { lat, lng },
+    placeTypes: place.types ?? [],
   };
 }
 

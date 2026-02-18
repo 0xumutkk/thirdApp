@@ -128,12 +128,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
 
   const nearbyCafes = useMemo(() => {
     const searchTerms: Record<string, string[]> = {
-      work: ['work', 'çalışma', 'laptop', 'priz', 'desk', 'coffee', 'kahve'],
+      work: ['work', 'çalışma', 'laptop', 'priz', 'desk', 'coffee', 'kahve', 'coworking', 'study', 'wifi', 'çalışma alanı'],
       view: ['manzara', 'deniz', 'teras', 'view', 'viewpoint'],
-      garden: ['bahçe', 'outdoor', 'terrace', 'açık hava', 'garden'],
+      garden: ['bahçe', 'outdoor', 'terrace', 'açık hava', 'garden', 'bostan', 'yeşil', 'park', 'teras'],
       botanical: ['botanik', 'bitki', 'yeşil', 'plant', 'flora'],
       creative: ['creative', 'konsept', 'sanat', 'art', 'design', 'ilham', 'yaratıcılık'],
-      bosphorus: ['boğaz', 'bosphorus', 'deniz manzarası', 'bebek', 'ortaköy'],
+      bosphorus: ['boğaz', 'bosphorus', 'deniz manzarası', 'bebek', 'ortaköy', 'arnavutköy', 'kuruçeşme', 'etiler'],
       breakfast: ['kahvaltı', 'brunch', 'yumurta'],
       filter: ['filtre', 'demleme', 'v60']
     };
@@ -142,7 +142,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
       if (activeFilters.length === 0) return true;
 
       return activeFilters.every(filterId => {
+        // work: powerOutlets/wifiSpeed first, then keyword fallback for Places API cafes
         if (filterId === 'work' && (cafe.powerOutlets || (cafe.wifiSpeed && parseInt(String(cafe.wifiSpeed)) >= 50))) return true;
+
+        // garden: hasGarden/amenities first, then keyword fallback for Places API cafes
         if (filterId === 'garden' && (cafe.hasGarden || cafe.amenities?.some(a => ['Outdoor', 'Garden', 'Bahçe'].includes(a)))) return true;
 
         const terms = searchTerms[filterId] || [filterId];
@@ -151,7 +154,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
           cafe.address,
           cafe.description || '',
           ...(cafe.amenities || []),
-          ...(cafe.moods || [])
+          ...(cafe.moods || []),
+          ...(cafe.placeTypes || [])
         ].join(' ').toLowerCase();
         return terms.some(term => searchable.includes(term.toLowerCase()));
       });

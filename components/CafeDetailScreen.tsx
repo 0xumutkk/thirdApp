@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef } from 'react';
-import { ChevronLeft, Share2, Star, Wifi, Zap, Wind, Navigation2, MapPin, Shield } from 'lucide-react';
+import { ChevronLeft, Share2, Star, Wifi, Zap, Wind, Navigation2, Shield } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
 import { Cafe } from '../types';
 
@@ -117,28 +117,19 @@ const CafeDetailScreen: React.FC<CafeDetailScreenProps> = ({ cafe, onBack, onJoi
             ))}
           </div>
 
-          {/* Konum - Mekan haritada (genel UI ile uyumlu kart + buton) */}
-          <div className="mb-10 p-6 bg-[#FAF9F6] rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-2xl bg-[#BC4749]/10 flex items-center justify-center shrink-0">
-                <MapPin className="w-5 h-5 text-[#BC4749]" />
-              </div>
-              <div>
-                <h3 className="font-outfit text-sm font-black text-[#1B4332] uppercase tracking-widest">Konum</h3>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mt-0.5">Haritada görüntüle</p>
-              </div>
-            </div>
+          {/* Konum - minimal harita + yönlendirme */}
+          <div className="mb-10">
             <div
               ref={mapContainerRef}
-              className="w-full h-[180px] rounded-[2rem] overflow-hidden border border-gray-100 bg-[#F0EFEB]"
+              className="w-full h-[160px] rounded-[1.5rem] overflow-hidden bg-[#F0EFEB]"
               aria-label="Mekan konumu"
             />
             {onGoToMap && (
               <button
                 onClick={() => onGoToMap(cafe)}
-                className="w-full mt-4 py-4 rounded-[2.5rem] bg-[#1B4332] text-white font-outfit font-bold text-sm uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_15px_40px_rgba(27,67,50,0.2)] active:scale-[0.98] transition-all"
+                className="w-full mt-3 py-3 rounded-[1.5rem] bg-[#1B4332] text-white font-outfit font-semibold text-xs uppercase tracking-wider flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
               >
-                <Navigation2 className="w-5 h-5" />
+                <Navigation2 className="w-4 h-4" />
                 Mekana Git
               </button>
             )}
