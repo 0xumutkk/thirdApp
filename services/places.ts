@@ -39,7 +39,7 @@ function loadGoogleMapsScript(): Promise<void> {
   return scriptLoadPromise;
 }
 
-function haversineDistanceMeters(
+export function haversineDistanceMeters(
   lat1: number,
   lng1: number,
   lat2: number,
@@ -172,4 +172,49 @@ export async function fetchNearbyCafesFromPlaces(
       resolve(cafes);
     });
   });
+}
+
+const DISCOVERY_CACHE_KEY = 'loca_discovery_cache';
+const DISCOVERY_TTL_MS = 60 * 60 * 1000; // 1 saat
+
+/**
+ * Hızlı Keşif listesi için yakındaki kafeleri getirir.
+ * İstek saatte 1 yapılır (localStorage cache).
+ */
+export async function fetchDiscoveryCafes(
+  lat: number,
+  lng: number,
+  radiusMeters: number = 2000,
+  keyword?: string
+): Promise<Cafe[]> {
+  const roundedLat = Number(lat.toFixed(3));
+  const roundedLng = Number(lng.toFixed(3));
+  const cacheKey = `${roundedLat},${roundedLng},${radiusMeters},${keyword || ''}`;
+
+  try {
+    const stored = localStorage.getItem(DISCOVERY_CACHE_KEY);
+    if (stored) {
+      const { key, cafes, timestamp } = JSON.parse(stored);
+      if (key === cacheKey && Date.now() - timestamp < DISCOVERY_TTL_MS) {
+        console.log('[PlacesService] Discovery cache HIT (1h)');
+        return cafes;
+      }
+    }
+  } catch (_) {
+    /* ignore parse errors */
+  }
+
+  console.log('[PlacesService] Discovery cache MISS. Fetching from API (max 1 req/hour)');
+  const cafes = await fetchNearbyCafesFromPlaces(lat, lng, radiusMeters, keyword);
+
+  try {
+    localStorage.setItem(
+      DISCOVERY_CACHE_KEY,
+      JSON.stringify({ key: cacheKey, cafes, timestamp: Date.now() })
+    );
+  } catch (_) {
+    /* ignore quota errors */
+  }
+
+  return cafes;
 }
