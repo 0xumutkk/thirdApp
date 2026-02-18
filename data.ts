@@ -194,9 +194,9 @@ export const COLLECTIONS: CafeCollection[] = [
     title: 'Manzara',
     description: 'Şehrin kaosundan uzaklaşıp gün batımını izleyebileceğiniz en iyi noktalar.',
     images: [
-      'https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?q=80&w=2070&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1625244724120-1fd1d34d00f6?q=80&w=2070&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1600093463592-8e36ae95ef56?q=80&w=2070&auto=format&fit=crop'
+      'https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?q=80&w=1000',
+      'https://images.unsplash.com/photo-1496417263034-38ec4f0b665a?q=80&w=2071',
+      'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?q=80&w=2070'
     ],
     cafeIds: ['2', '4', '6', '7'],
     type: 'DYNAMIC',
@@ -209,9 +209,9 @@ export const COLLECTIONS: CafeCollection[] = [
     title: 'Bahçe',
     description: 'Betonların arasında yeşile ve sessizliğe doyacağınız vahalar.',
     images: [
-      'https://images.unsplash.com/photo-1509042239860-f550ce710b93?q=80&w=1974&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1442512595331-e89e73853f31?q=80&w=2070&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=1974&auto=format&fit=crop'
+      'https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=1000',
+      'https://images.unsplash.com/photo-1511739001486-6bfe10ce785f?q=80&w=1974',
+      'https://images.unsplash.com/photo-1541432901042-2d8bd64b4a9b?q=80&w=1974'
     ],
     cafeIds: ['1', '2', '6', '7'],
     type: 'DYNAMIC',
@@ -224,9 +224,9 @@ export const COLLECTIONS: CafeCollection[] = [
     title: 'Botanik',
     description: 'Bitkilerle çevrili, doğayla iç içe kahve durakları.',
     images: [
-      'https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=2070&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=1974&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1509042239860-f550ce710b93?q=80&w=1974&auto=format&fit=crop'
+      'https://images.unsplash.com/photo-1509042239860-f550ce710b93?q=80&w=1000',
+      'https://images.unsplash.com/photo-1466692476868-aef1dfb1e735?q=80&w=1000',
+      'https://images.unsplash.com/photo-1416870233488-8cf96956b174?q=80&w=1000'
     ],
     cafeIds: ['1', '2', '5'],
     type: 'DYNAMIC',
@@ -239,9 +239,9 @@ export const COLLECTIONS: CafeCollection[] = [
     title: 'Konsept',
     description: 'Vinyl, sanat ve özgün atmosferiyle fark yaratan mekanlar.',
     images: [
-      'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=2070&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1453614512568-c4024d13c247?q=80&w=2000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1517502884422-41e157d44305?q=80&w=2064&auto=format&fit=crop'
+      'https://images.unsplash.com/photo-1481833761820-0509d3217039?q=80&w=1000',
+      'https://images.unsplash.com/photo-1453614512568-c4024d13c247?q=80&w=1000',
+      'https://images.unsplash.com/photo-1511920170033-f8396924c348?q=80&w=1000'
     ],
     cafeIds: ['3', '4', '5'],
     type: 'DYNAMIC',
@@ -254,9 +254,9 @@ export const COLLECTIONS: CafeCollection[] = [
     title: 'Çalışma',
     description: 'Priz, hızlı wifi ve odaklanmak için ideal mekanlar.',
     images: [
-      'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=2070&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=2069&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1517502884422-41e157d44305?q=80&w=2064&auto=format&fit=crop'
+      'https://images.unsplash.com/photo-1497215728101-856f4ea42174?q=80&w=1000',
+      'https://images.unsplash.com/photo-1600096194534-95cf5ece04cf?q=80&w=1000',
+      'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=1000'
     ],
     cafeIds: ['1', '3', '6'],
     type: 'DYNAMIC',
@@ -269,9 +269,7 @@ export const COLLECTIONS: CafeCollection[] = [
     title: 'Boğaz',
     description: 'Boğaz manzaralı, martı sesleri eşliğinde kahve keyfi.',
     images: [
-      'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?q=80&w=1974&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?q=80&w=2070&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1600093463592-8e36ae95ef56?q=80&w=2070&auto=format&fit=crop'
+      '/assets/bosphorus.jpg'
     ],
     cafeIds: ['6', '7'],
     type: 'DYNAMIC',
@@ -281,6 +279,13 @@ export const COLLECTIONS: CafeCollection[] = [
     city: 'İstanbul'
   }
 ];
+
+
+
+
+
+
+
 
 export const EDITOR_PICKS: EditorPick[] = [
   {

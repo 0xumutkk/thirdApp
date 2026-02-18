@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Search, MapPin, Wallet, Star, Sparkles, Coffee, Check, Target, SlidersHorizontal, Loader2, ExternalLink, RefreshCw, Clock, ChevronDown, Radio, Laptop, Leaf, Wifi, Utensils, Zap, MessageSquare, Mountain, Moon, Briefcase, Plus, BookOpen, ArrowRight, User, Timer, Ticket, Map, ChevronLeft, Heart } from 'lucide-react';
+import { Search, MapPin, Wallet, Star, Sparkles, Coffee, Check, Target, SlidersHorizontal, Loader2, ExternalLink, RefreshCw, Clock, ChevronDown, Radio, Laptop, Leaf, Wifi, Utensils, Zap, MessageSquare, Mountain, Moon, Briefcase, Plus, BookOpen, ArrowRight, User, Timer, Ticket, Map, ChevronLeft, Heart, Trees, Sprout, Palette, Ship, Telescope, Wind, Flower2 } from 'lucide-react';
 import { CAFES, CAMPAIGNS, EDITOR_PICKS } from '../data';
 import { Cafe, CafeCollection, EditorPick, Campaign } from '../types';
-import { fetchDiscoveryCafes } from '../services/places';
+import { fetchDiscoveryCafes, haversineDistanceMeters } from '../services/places';
 
 interface HomeScreenProps {
   onSelectCafe: (cafe: Cafe) => void;
@@ -68,7 +68,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
   useEffect(() => {
     const center = userLocation || DEFAULT_CENTER;
     setDiscoveryLoading(true);
-    fetchDiscoveryCafes(center.lat, center.lng, 2000)
+    fetchDiscoveryCafes(center.lat, center.lng, 500)
       .then((fetched) => setDiscoveryCafes(fetched))
       .catch(() => setDiscoveryCafes([]))
       .finally(() => setDiscoveryLoading(false));
@@ -97,14 +97,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
 
   const dynamicShortcuts = useMemo(() => {
     const base = [
-      { id: 'work', label: 'Çalışma', icon: <Briefcase className="w-3 h-3" /> },
-      { id: 'view', label: 'Manzara', icon: <Mountain className="w-3 h-3" /> },
-      { id: 'garden', label: 'Bahçe', icon: <Leaf className="w-3 h-3" /> },
-      { id: 'botanical', label: 'Botanik', icon: <Leaf className="w-3 h-3" /> },
-      { id: 'creative', label: 'Konsept', icon: <Sparkles className="w-3 h-3" /> }
+      { id: 'work', label: 'Çalışma', icon: <Laptop className="w-3.5 h-3.5" />, color: '#BC4749' },
+      { id: 'view', label: 'Manzara', icon: <Mountain className="w-3.5 h-3.5" />, color: '#BC4749' },
+      { id: 'garden', label: 'Bahçe', icon: <Trees className="w-3.5 h-3.5" />, color: '#BC4749' },
+      { id: 'botanical', label: 'Botanik', icon: <Sprout className="w-3.5 h-3.5" />, color: '#BC4749' },
+      { id: 'creative', label: 'Konsept', icon: <Palette className="w-3.5 h-3.5" />, color: '#BC4749' }
     ];
     if (isIstanbul) {
-      base.push({ id: 'bosphorus', label: 'Boğaz', icon: <Mountain className="w-3 h-3" /> });
+      base.push({ id: 'bosphorus', label: 'Boğaz', icon: <Ship className="w-3.5 h-3.5" />, color: '#BC4749' });
     }
     return base;
   }, [isIstanbul]);
@@ -139,6 +139,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
     };
 
     return baseCafes.filter(cafe => {
+      // 1. Strict Distance Filter (500m)
+      const center = userLocation || DEFAULT_CENTER;
+      if (cafe.coordinates) {
+        const dist = haversineDistanceMeters(center.lat, center.lng, cafe.coordinates.lat, cafe.coordinates.lng);
+        if (dist > 500) return false;
+      }
+
+      // 2. Active Category Filters
       if (activeFilters.length === 0) return true;
 
       return activeFilters.every(filterId => {
@@ -160,7 +168,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
         return terms.some(term => searchable.includes(term.toLowerCase()));
       });
     });
-  }, [activeFilters, baseCafes]);
+  }, [activeFilters, baseCafes, userLocation]);
 
   const featuredCafe = cafes[carouselIndex] || cafes[0];
   const getCafeData = (id: string) => cafes.find(c => c.id === id);
@@ -239,21 +247,32 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
           </div>
         </div>
 
-        <div className="flex gap-2 overflow-x-auto no-scrollbar px-8 py-1">
-          {dynamicShortcuts.map((filter) => (
-            <button
-              key={filter.id}
-              onClick={() => toggleFilter(filter.id)}
-              className={`shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-[1.2rem] border transition-all font-bold text-[10px] uppercase tracking-tighter active:scale-95 ${activeFilters.includes(filter.id)
-                ? 'bg-[#1B4332] border-[#1B4332] text-white shadow-lg'
-                : 'bg-white/60 backdrop-blur-md border-white/80 text-[#1B4332]'
-                } `}
-            >
-              <span className={`${activeFilters.includes(filter.id) ? 'text-white' : 'text-[#BC4749]'} `}>{filter.icon}</span>
-              {filter.label}
-              {activeFilters.includes(filter.id) && <Plus className="w-2.5 h-2.5 ml-0.5 rotate-45" />}
-            </button>
-          ))}
+        <div className="flex gap-2.5 overflow-x-auto no-scrollbar px-8 py-2">
+          {dynamicShortcuts.map((filter) => {
+            const isActive = activeFilters.includes(filter.id);
+            return (
+              <button
+                key={filter.id}
+                onClick={() => toggleFilter(filter.id)}
+                className={`shrink-0 flex items-center gap-2.5 px-5 py-3 rounded-[1.5rem] transition-all duration-300 font-black text-[10px] uppercase tracking-wider active:scale-95 group relative overflow-hidden ${isActive
+                  ? 'text-white shadow-[0_10px_20px_rgba(27,67,50,0.2)]'
+                  : 'bg-white/70 backdrop-blur-xl border border-white/80 text-[#1B4332] shadow-sm hover:shadow-md'
+                  } `}
+                style={{
+                  background: isActive ? filter.color : undefined
+                }}
+              >
+                {isActive && (
+                  <div className="absolute inset-0 bg-gradient-to-tr from-black/10 to-transparent pointer-events-none" />
+                )}
+                <span className={`transition-transform duration-300 group-hover:scale-110 ${isActive ? 'text-white' : ''} `} style={{ color: !isActive ? filter.color : undefined }}>
+                  {filter.icon}
+                </span>
+                <span className="relative z-10">{filter.label}</span>
+                {isActive && <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse shadow-sm" />}
+              </button>
+            );
+          })}
         </div>
 
         <div className="px-8 space-y-4 pt-2">
@@ -265,29 +284,29 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
                 ))}
               </>
             ) : (
-            nearbyCafes.map(cafe => (
-              <div
-                key={cafe.id}
-                onClick={() => onSelectCafe(cafe)}
-                className="relative w-48 aspect-[3/4] shrink-0 rounded-[2.5rem] overflow-hidden shadow-lg active:scale-95 transition-all cursor-pointer group"
-              >
-                <img src={cafe.image} className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-[2s]" alt={cafe.name} />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-                <div className="absolute top-4 left-4 right-4 flex justify-between items-start">
-                  <div className="bg-white/90 backdrop-blur-md px-2.5 py-1.5 rounded-[1rem] flex items-center gap-1.5 shadow-sm border border-white/50">
-                    <Star className="w-2.5 h-2.5 text-[#BC4749] fill-[#BC4749]" />
-                    <span className="text-[9px] font-black text-[#1B4332]">{cafe.rating}</span>
-                    {cafe.reviews > 0 && (
-                      <span className="text-[8px] font-bold text-[#1B4332]/70">({cafe.reviews})</span>
-                    )}
+              nearbyCafes.map(cafe => (
+                <div
+                  key={cafe.id}
+                  onClick={() => onSelectCafe(cafe)}
+                  className="relative w-48 aspect-[3/4] shrink-0 rounded-[2.5rem] overflow-hidden shadow-lg active:scale-95 transition-all cursor-pointer group"
+                >
+                  <img src={cafe.image} className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-[2s]" alt={cafe.name} />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
+                  <div className="absolute top-4 left-4 right-4 flex justify-between items-start">
+                    <div className="bg-white/90 backdrop-blur-md px-2.5 py-1.5 rounded-[1rem] flex items-center gap-1.5 shadow-sm border border-white/50">
+                      <Star className="w-2.5 h-2.5 text-[#BC4749] fill-[#BC4749]" />
+                      <span className="text-[9px] font-black text-[#1B4332]">{cafe.rating}</span>
+                      {cafe.reviews > 0 && (
+                        <span className="text-[8px] font-bold text-[#1B4332]/70">({cafe.reviews})</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="absolute bottom-5 left-5 right-5">
+                    <h4 className="font-outfit text-sm font-bold text-white truncate mb-0.5">{cafe.name}</h4>
+                    <p className="text-[8px] text-white/60 font-bold uppercase tracking-widest">{cafe.distance}</p>
                   </div>
                 </div>
-                <div className="absolute bottom-5 left-5 right-5">
-                  <h4 className="font-outfit text-sm font-bold text-white truncate mb-0.5">{cafe.name}</h4>
-                  <p className="text-[8px] text-white/60 font-bold uppercase tracking-widest">{cafe.distance}</p>
-                </div>
-              </div>
-            ))
+              ))
             )}
           </div>
         </div>

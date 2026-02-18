@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Navigation, Navigation2, Star, Briefcase, Leaf, Utensils, Coffee, Mountain, Plus, Search, MapPin, Wifi, Clock, ChevronDown, Radio, Sparkles } from 'lucide-react';
+import { Navigation, Navigation2, Star, Briefcase, Leaf, Utensils, Coffee, Mountain, Plus, Search, MapPin, Wifi, Clock, ChevronDown, Radio, Sparkles, Laptop, Telescope, Trees, Sprout, Palette, Ship } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
 import Supercluster from 'supercluster';
 import { Cafe, MapState } from '../types';
@@ -69,10 +69,10 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
   const lastSearchRef = useRef<{ lat: number; lng: number; radius: number } | null>(
     initialMapState?.mapCafes?.length && initialMapState?.selectedRadius
       ? {
-          lat: (initialMapState.hasPinBeenPlaced ? initialMapState.pinLocation : initialMapState.userLocation).lat,
-          lng: (initialMapState.hasPinBeenPlaced ? initialMapState.pinLocation : initialMapState.userLocation).lng,
-          radius: initialMapState.selectedRadius,
-        }
+        lat: (initialMapState.hasPinBeenPlaced ? initialMapState.pinLocation : initialMapState.userLocation).lat,
+        lng: (initialMapState.hasPinBeenPlaced ? initialMapState.pinLocation : initialMapState.userLocation).lng,
+        radius: initialMapState.selectedRadius,
+      }
       : null
   );
   const [mapReady, setMapReady] = useState(false);
@@ -93,7 +93,7 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
   const pinModeActiveRef = useRef(false);
   const mapStateRef = useRef<MapState | null>(null);
   const routeToCafeRef = useRef<Cafe | null>(null);
-  const handleSearchRef = useRef<() => void>(() => {});
+  const handleSearchRef = useRef<() => void>(() => { });
   const mapLoadTimeRef = useRef<number>(0);
 
   useEffect(() => {
@@ -127,14 +127,14 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
 
   const categoryShortcuts = useMemo(() => {
     const base = [
-      { id: 'work', label: 'Çalışma', icon: <Briefcase className="w-3 h-3" /> },
-      { id: 'view', label: 'Manzara', icon: <Mountain className="w-3 h-3" /> },
-      { id: 'garden', label: 'Bahçe', icon: <Leaf className="w-3 h-3" /> },
-      { id: 'botanical', label: 'Botanik', icon: <Leaf className="w-3 h-3" /> },
-      { id: 'creative', label: 'Konsept', icon: <Sparkles className="w-3 h-3" /> }
+      { id: 'work', label: 'Çalışma', icon: <Laptop className="w-3.5 h-3.5" />, color: '#BC4749' },
+      { id: 'view', label: 'Manzara', icon: <Mountain className="w-3.5 h-3.5" />, color: '#BC4749' },
+      { id: 'garden', label: 'Bahçe', icon: <Trees className="w-3.5 h-3.5" />, color: '#BC4749' },
+      { id: 'botanical', label: 'Botanik', icon: <Sprout className="w-3.5 h-3.5" />, color: '#BC4749' },
+      { id: 'creative', label: 'Konsept', icon: <Palette className="w-3.5 h-3.5" />, color: '#BC4749' }
     ];
     if (isIstanbul) {
-      base.push({ id: 'bosphorus', label: 'Boğaz', icon: <Mountain className="w-3 h-3" /> });
+      base.push({ id: 'bosphorus', label: 'Boğaz', icon: <Ship className="w-3.5 h-3.5" />, color: '#BC4749' });
     }
     return base;
   }, [isIstanbul]);
@@ -725,23 +725,32 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
         <div className="h-full overflow-y-auto px-8 pb-40 no-scrollbar">
           <div className="mt-4 mb-6">
             <h3 className="font-outfit text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Kategoriler</h3>
-            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-              {categoryShortcuts.map((filter) => (
-                <button
-                  key={filter.id}
-                  onClick={() => toggleFilter(filter.id)}
-                  className={`shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-[1.2rem] border transition-all font-bold text-[10px] uppercase tracking-tighter active:scale-95 ${activeFilters.includes(filter.id)
-                    ? 'bg-[#1B4332] border-[#1B4332] text-white shadow-lg'
-                    : 'bg-white/60 backdrop-blur-md border-white/80 text-[#1B4332]'
-                    }`}
-                >
-                  <span className={activeFilters.includes(filter.id) ? 'text-white' : 'text-[#BC4749]'}>
-                    {filter.icon}
-                  </span>
-                  {filter.label}
-                  {activeFilters.includes(filter.id) && <Plus className="w-2.5 h-2.5 ml-0.5 rotate-45" />}
-                </button>
-              ))}
+            <div className="flex gap-2.5 overflow-x-auto no-scrollbar pb-2">
+              {categoryShortcuts.map((filter) => {
+                const isActive = activeFilters.includes(filter.id);
+                return (
+                  <button
+                    key={filter.id}
+                    onClick={() => toggleFilter(filter.id)}
+                    className={`shrink-0 flex items-center gap-2.5 px-5 py-3 rounded-[1.5rem] transition-all duration-300 font-black text-[10px] uppercase tracking-wider active:scale-95 group relative overflow-hidden ${isActive
+                      ? 'text-white shadow-[0_10px_20px_rgba(27,67,50,0.2)]'
+                      : 'bg-white/70 backdrop-blur-xl border border-white/80 text-[#1B4332] shadow-sm hover:shadow-md'
+                      }`}
+                    style={{
+                      background: isActive ? filter.color : undefined
+                    }}
+                  >
+                    {isActive && (
+                      <div className="absolute inset-0 bg-gradient-to-tr from-black/10 to-transparent pointer-events-none" />
+                    )}
+                    <span className={`transition-transform duration-300 group-hover:scale-110 ${isActive ? 'text-white' : ''}`} style={{ color: !isActive ? filter.color : undefined }}>
+                      {filter.icon}
+                    </span>
+                    <span className="relative z-10">{filter.label}</span>
+                    {isActive && <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse shadow-sm" />}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
