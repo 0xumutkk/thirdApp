@@ -84,7 +84,6 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
   const [currentTime] = useState(() => new Date());
   const [isLoading, setIsLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(() => initialMapState?.searchError ?? null);
-  const [initialSearchDone, setInitialSearchDone] = useState(false);
   const [isNudging, setIsNudging] = useState(false);
 
 
@@ -94,6 +93,8 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
   const pinModeActiveRef = useRef(false);
   const mapStateRef = useRef<MapState | null>(null);
   const routeToCafeRef = useRef<Cafe | null>(null);
+  const handleSearchRef = useRef<() => void>(() => {});
+  const mapLoadTimeRef = useRef<number>(0);
 
   useEffect(() => {
     routeToCafeRef.current = routeToCafe ?? null;
@@ -183,8 +184,10 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
 
   const filterByRadius = useCallback((cafes: Cafe[], center: { lat: number; lng: number }, radiusM: number) =>
     cafes.filter(c => {
+      if (!c.coordinates) return false;
       const dist = haversineDistanceMeters(center.lat, center.lng, c.coordinates.lat, c.coordinates.lng);
-      return dist <= radiusM;
+      const tolerance = radiusM < 1000 ? 80 : radiusM * 0.08;
+      return dist <= radiusM + tolerance;
     }), []);
 
   const handleSearch = useCallback(async () => {
@@ -230,16 +233,17 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
   }, [mapReady, circleCenter, selectedRadius, activeFilters, allFetchedCafes.length, filterByRadius]);
 
   useEffect(() => {
-    if (mapReady && circleCenter && !initialSearchDone && !isLoading) {
-      setInitialSearchDone(true);
-      handleSearch();
-    }
-  }, [mapReady, circleCenter.lat, circleCenter.lng, handleSearch, initialSearchDone, isLoading]);
+    handleSearchRef.current = handleSearch;
+  }, [handleSearch]);
+
 
   useEffect(() => {
     if (!circleCenter || selectedRadius === null) return;
     const last = lastSearchRef.current;
-    const sameCenter = last && Math.abs(last.lat - circleCenter.lat) < 1e-5 && Math.abs(last.lng - circleCenter.lng) < 1e-5;
+    const sameCenter = last && Math.abs(last.lat - circleCenter.lat) < 1e-6 && Math.abs(last.lng - circleCenter.lng) < 1e-6;
+
+    const justLoaded = Date.now() - mapLoadTimeRef.current < 2500;
+    if (justLoaded && !sameCenter) return;
 
     if (sameCenter && allFetchedCafes.length > 0 && selectedRadius <= last!.radius) {
       const filtered = filterByRadius(allFetchedCafes, circleCenter, selectedRadius);
@@ -266,7 +270,6 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
         [lng + degLng, lat + degLat]
       );
 
-      // Delay fitBounds slightly so the user sees the circle grow/shrink first
       const timer = setTimeout(() => {
         if (map.isStyleLoaded()) {
           map.fitBounds(bounds, {
@@ -408,7 +411,12 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
         }
       });
 
+      mapLoadTimeRef.current = Date.now();
       setMapReady(true);
+
+      if (selectedRadius !== null) {
+        setTimeout(() => handleSearchRef.current(), 100);
+      }
 
       const cafe = routeToCafeRef.current;
       if (cafe?.coordinates) {
@@ -453,6 +461,7 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
     });
 
     map.on('moveend', () => {
+      if (Date.now() - mapLoadTimeRef.current < 3500) return;
       if (clusterIndex.current && mapInstance.current?.isStyleLoaded()) renderMarkers();
     });
 
