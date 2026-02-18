@@ -19,7 +19,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [selectedLocation, setSelectedLocation] = useState("Kadıköy, İstanbul");
+  const [selectedLocation, setSelectedLocation] = useState(userLocation ? "İstanbul" : "Konum alınıyor...");
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [claimedIds, setClaimedIds] = useState<string[]>([]);
   const [discoveryCafes, setDiscoveryCafes] = useState<Cafe[]>([]);
@@ -29,10 +29,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
 
   useEffect(() => {
     const fetchLocationName = async () => {
-      if (!userLocation) return;
+      if (!userLocation) {
+        setSelectedLocation("Konum aranıyor...");
+        return;
+      }
 
       const now = Date.now();
-      if (now - lastFetchTimeRef.current < 10000) return;
+      // Bypass throttle if we are still in default/loading state to get first real location fast
+      const isInitialState = selectedLocation === "Konum aranıyor..." || selectedLocation === "Kadıköy, İstanbul";
+      if (!isInitialState && now - lastFetchTimeRef.current < 3000) return;
+
       lastFetchTimeRef.current = now;
 
       try {
@@ -59,11 +65,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
         }
       } catch (error) {
         console.error("Reverse geocoding error:", error);
-        setSelectedLocation("Konum bulunamadı");
+        // Don't overwrite if we have a stale but valid location
+        if (selectedLocation === "Konum aranıyor...") {
+          setSelectedLocation("Konum bulunamadı");
+        }
       }
     };
     fetchLocationName();
-  }, [userLocation]);
+  }, [userLocation, selectedLocation]);
 
   useEffect(() => {
     const center = userLocation || DEFAULT_CENTER;
