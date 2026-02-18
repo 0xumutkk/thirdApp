@@ -32,14 +32,23 @@ const FavoritesScreen: React.FC<FavoritesScreenProps> = ({ onSelectCafe, onSelec
     }
   }, [currentLocation, dynamicCollections, activeCollectionId]);
 
+  const tabsRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    if (isPaused) return;
-    const interval = setInterval(() => {
-      const nextIndex = (activeCollectionIndex + 1) % dynamicCollections.length;
-      setActiveCollectionId(dynamicCollections[nextIndex]?.id ?? '');
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [activeCollectionIndex, isPaused, dynamicCollections.length]);
+    const activeTab = tabsRef.current?.querySelector('[data-active="true"]');
+    if (activeTab) {
+      activeTab.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'center'
+      });
+    }
+  }, [activeCollectionId]);
+
+  const handleNextCollection = () => {
+    const nextIndex = (activeCollectionIndex + 1) % dynamicCollections.length;
+    setActiveCollectionId(dynamicCollections[nextIndex]?.id ?? '');
+  };
 
   const handleToggleView = () => {
     setShowSpotlightView((v) => !v);
@@ -127,16 +136,17 @@ const FavoritesScreen: React.FC<FavoritesScreenProps> = ({ onSelectCafe, onSelec
         </div>
 
         {/* Categories Tabs */}
-        <div className="px-8 flex gap-2 overflow-x-auto no-scrollbar mb-4">
+        <div ref={tabsRef} className="px-8 flex gap-2 overflow-x-auto no-scrollbar mb-4 scroll-smooth">
           {dynamicCollections.map((col) => {
             const isActive = col.id === activeCollectionId;
             return (
               <button
                 key={col.id}
-                onClick={() => { setActiveCollectionId(col.id); setIsPaused(true); }}
+                data-active={isActive ? "true" : "false"}
+                onClick={() => { setActiveCollectionId(col.id); }}
                 className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap border ${isActive
-                    ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-md scale-105'
-                    : 'bg-white text-gray-400 border-gray-100'
+                  ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-md scale-105'
+                  : 'bg-white text-gray-400 border-gray-100'
                   }`}
               >
                 {col.tag?.replace(/ .*/, '')}
@@ -151,8 +161,13 @@ const FavoritesScreen: React.FC<FavoritesScreenProps> = ({ onSelectCafe, onSelec
             className="w-full aspect-[4/5] relative rounded-[3rem] shadow-2xl overflow-hidden cursor-pointer group active:scale-[0.98] transition-all duration-500 ease-out"
             onClick={() => onSelectCollection(activeCollection)}
           >
-            {/* Render the Active Collection Card Content */}
-            <SpotlightCardContent collection={activeCollection} />
+            <SpotlightCardContent
+              collection={activeCollection}
+              collectionIndex={activeCollectionIndex}
+              totalCollections={dynamicCollections.length}
+              isPaused={isPaused}
+              onStoryEnd={handleNextCollection}
+            />
           </div>
         </div>
 
@@ -161,58 +176,81 @@ const FavoritesScreen: React.FC<FavoritesScreenProps> = ({ onSelectCafe, onSelec
   );
 };
 
-// Sub-component to handle image rotation WITHIN the single active card
-const SpotlightCardContent: React.FC<{ collection: CafeCollection }> = ({ collection }) => {
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+const IMAGE_DURATION_MS = 3500;
 
-  // Reset image index when collection changes
+// Sub-component to handle image rotation WITHIN the single active card
+const SpotlightCardContent: React.FC<{
+  collection: CafeCollection;
+  collectionIndex: number;
+  totalCollections: number;
+  isPaused: boolean;
+  onStoryEnd: () => void;
+}> = ({ collection, collectionIndex, totalCollections, isPaused, onStoryEnd }) => {
+  const [imageProgress, setImageProgress] = useState(0);
+
+  // Reset progress when collection changes
   useEffect(() => {
-    setCurrentImageIndex(0);
+    setImageProgress(0);
   }, [collection.id]);
 
-  // Rotate images inside the active card
+  // Handle progression for the current collection (one slide per filter)
   useEffect(() => {
-    if (collection.images && collection.images.length > 1) {
-      const interval = setInterval(() => {
-        setCurrentImageIndex((prev) => (prev + 1) % collection.images.length);
-      }, 3500); // Change image every 3.5s
-      return () => clearInterval(interval);
-    }
-  }, [collection.id, collection.images]);
+    if (isPaused) return;
+
+    const startTime = Date.now();
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min((elapsed / IMAGE_DURATION_MS) * 100, 100);
+      setImageProgress(progress);
+    }, 50);
+
+    const timeout = setTimeout(() => {
+      onStoryEnd();
+      setImageProgress(0);
+    }, IMAGE_DURATION_MS);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [collection.id, isPaused, onStoryEnd]);
 
   return (
     <>
-      {/* Background Images with Crossfade */}
-      {collection.images.map((img, idx) => (
-        <img
-          key={`${collection.id}-${img}`}
-          src={img}
-          className={`absolute inset-0 w-full h-full object-cover transition-all duration-[1500ms] ease-in-out ${idx === currentImageIndex ? 'opacity-100 scale-105' : 'opacity-0 scale-100'
-            }`}
-          alt={collection.title}
-        />
-      ))}
+      {/* Background Image (First image of the collection) */}
+      <div className="absolute inset-0 bg-black">
+        {collection.images.slice(0, 1).map((img) => (
+          <img
+            key={`${collection.id}-${img}`}
+            src={img}
+            className="absolute inset-0 w-full h-full object-cover scale-110 saturate-[1.1] animate-slow-zoom"
+            alt={collection.title}
+          />
+        ))}
+      </div>
 
-      <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/90" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/95" />
       <div className="absolute inset-0 bg-gradient-to-r from-black/40 to-transparent" />
 
-      {/* Progress Bar (Story Style) at Top */}
-      <div className="absolute top-6 left-6 right-6 flex gap-1.5">
-        {collection.images.map((_, idx) => (
+      {/* Progress Bar (Story Style) - Now reflects filters, not inner images */}
+      <div className="absolute top-6 left-6 right-6 flex gap-1.5 z-20">
+        {Array.from({ length: totalCollections }).map((_, idx) => (
           <div key={idx} className="h-1 flex-1 bg-white/20 rounded-full overflow-hidden">
             <div
-              className={`h-full bg-white transition-all duration-300 ${idx === currentImageIndex ? 'opacity-100' : 'opacity-0'}`}
-              style={{ width: '100%' }} // Simple active indicator
+              className="h-full bg-white rounded-full transition-[width] duration-75 ease-linear"
+              style={{
+                width: idx < collectionIndex ? '100%' : idx === collectionIndex ? `${imageProgress}%` : '0%'
+              }}
             />
           </div>
         ))}
       </div>
 
       {/* Floating Sentiment Badge */}
-      <div className="absolute top-10 right-6 animate-page-in delay-100">
-        <div className="bg-white/20 backdrop-blur-xl border border-white/30 p-1 rounded-[1.2rem] shadow-xl">
-          <div className="bg-white px-3 py-2 rounded-[0.9rem] flex flex-col items-center">
-            <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Google</span>
+      <div className="absolute top-10 right-6 animate-page-in delay-100 z-20">
+        <div className="bg-white/10 backdrop-blur-2xl border border-white/20 p-1 rounded-[1.2rem] shadow-2xl">
+          <div className="bg-white px-3 py-2 rounded-[1rem] flex flex-col items-center">
+            <span className="text-[8px] font-black text-gray-400 uppercase tracking-[0.2em] mb-0.5">Rating</span>
             <div className="flex items-center gap-1">
               <Star className="w-3 h-3 text-[#BC4749] fill-[#BC4749]" />
               <span className="text-xs font-black text-[#1B4332]">{collection.ratingSummary?.split(' ')[0]}</span>
@@ -222,43 +260,58 @@ const SpotlightCardContent: React.FC<{ collection: CafeCollection }> = ({ collec
       </div>
 
       {/* Main Content */}
-      <div className="absolute bottom-0 left-0 right-0 p-8">
-        <div className="bg-[#BC4749] inline-block px-3 py-1 rounded-lg mb-3 shadow-lg rotate-1">
-          <div className="flex items-center gap-1.5">
-            <Sparkles className="w-3 h-3 text-white fill-white" />
-            <span className="text-[9px] font-black text-white uppercase tracking-widest">{collection.sentiment?.replace('En Çok Övülen:', '')}</span>
+      <div className="absolute bottom-0 left-0 right-0 p-8 z-10">
+        <div className="flex flex-col gap-1 mb-5">
+          <div className="flex items-center gap-2">
+            <div className="bg-[#BC4749] px-3 py-1 rounded-lg shadow-xl shadow-[#BC4749]/20 transform -rotate-1">
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-white fill-white" />
+                <span className="text-[10px] font-black text-white uppercase tracking-widest">{collection.sentiment?.replace('En Çok Övülen:', '').trim()}</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        <h2 className="font-outfit text-4xl font-black text-white leading-[0.9] mb-3 drop-shadow-xl">
+        <h2 className="font-outfit text-5xl font-black text-white leading-[0.85] mb-5 drop-shadow-2xl">
           {collection.title.split(' ').map((word, i) => (
-            <span key={i} className="block">{word}</span>
+            <span key={i} className="block last:text-[#BC4749] last:drop-shadow-none">{word}</span>
           ))}
         </h2>
 
-        <p className="text-white/80 text-sm font-medium line-clamp-2 leading-relaxed mb-6 w-5/6">
-          {collection.description}
-        </p>
+        <div className="relative mb-8">
+          <p className="text-white/95 text-[15px] font-medium line-clamp-3 leading-relaxed max-w-[90%] border-l-2 border-[#BC4749]/50 pl-4">
+            {collection.description}
+          </p>
+        </div>
 
-        <div className="flex items-center justify-between border-t border-white/20 pt-4">
-          <div className="flex -space-x-3">
-            {collection.cafeIds.map((id) => (
-              <div key={id} className="w-8 h-8 rounded-full border-2 border-[#1B4332] bg-white overflow-hidden">
-                <img src={`https://api.dicebear.com/7.x/identicon/svg?seed=${id}`} alt="" className="w-full h-full opacity-80" />
-              </div>
-            ))}
-            <div className="w-8 h-8 rounded-full border-2 border-[#1B4332] bg-white flex items-center justify-center">
-              <span className="text-[9px] font-black text-[#1B4332]">+{collection.cafeIds.length}</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex -space-x-4">
+              {collection.cafeIds.slice(0, 3).map((id) => (
+                <div key={id} className="w-10 h-10 rounded-full border-2 border-white/20 bg-white/10 backdrop-blur-md overflow-hidden ring-4 ring-black/10">
+                  <img src={`https://api.dicebear.com/7.x/identicon/svg?seed=${id}`} alt="" className="w-full h-full opacity-90" />
+                </div>
+              ))}
+              {collection.cafeIds.length > 3 && (
+                <div className="w-10 h-10 rounded-full border-2 border-white/20 bg-[#1B4332] flex items-center justify-center ring-4 ring-black/10">
+                  <span className="text-[11px] font-black text-white">+{collection.cafeIds.length - 3}</span>
+                </div>
+              )}
+            </div>
+            <div>
+              <p className="text-[10px] font-black text-white uppercase tracking-[0.2em] opacity-50">Önerilen Mekanlar</p>
+              <p className="text-xs font-bold text-white uppercase tracking-wider">{collection.tag}</p>
             </div>
           </div>
 
-          <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center active:scale-90 transition-transform">
-            <ArrowRight className="w-5 h-5 text-[#1B4332]" />
+          <div className="w-14 h-14 rounded-2xl bg-white flex items-center justify-center active:scale-90 transition-all shadow-2xl group-hover:bg-[#BC4749] group-hover:text-white group-hover:rotate-12">
+            <ArrowRight className="w-7 h-7 text-[#1B4332] group-hover:text-white transition-colors" />
           </div>
         </div>
       </div>
     </>
   );
 }
+
 
 export default FavoritesScreen;
