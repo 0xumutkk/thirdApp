@@ -25,6 +25,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
   const [discoveryCafes, setDiscoveryCafes] = useState<Cafe[]>([]);
   const [discoveryLoading, setDiscoveryLoading] = useState(false);
 
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
   const lastFetchTimeRef = useRef<number>(0);
 
   useEffect(() => {
@@ -84,19 +87,44 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
   }, [userLocation?.lat, userLocation?.lng]);
 
   useEffect(() => {
-    const carouselInterval = setInterval(() => {
-      setCarouselIndex((prev) => (prev + 1) % (cafes.length || 1));
-    }, 5000);
-
     const clockInterval = setInterval(() => {
       setCurrentTime(new Date());
     }, 60000);
 
-    return () => {
-      clearInterval(carouselInterval);
-      clearInterval(clockInterval);
-    };
-  }, [cafes.length]);
+    return () => clearInterval(clockInterval);
+  }, []);
+
+  useEffect(() => {
+    const maxItems = Math.min(cafes.length || 1, 5);
+    const carouselInterval = setInterval(() => {
+      setCarouselIndex((prev) => (prev + 1) % maxItems);
+    }, 5000);
+
+    return () => clearInterval(carouselInterval);
+  }, [cafes.length, carouselIndex]);
+
+  const onTouchStartContent = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMoveContent = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEndContent = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > 50;
+    const isRightSwipe = distance < -50;
+    const maxItems = Math.min(cafes.length || 1, 5);
+
+    if (isLeftSwipe) {
+      setCarouselIndex((prev) => (prev + 1) % maxItems);
+    } else if (isRightSwipe) {
+      setCarouselIndex((prev) => (prev === 0 ? maxItems - 1 : prev - 1));
+    }
+  };
 
   const isIstanbul = useMemo(() => {
     const loc = selectedLocation.toLowerCase();
@@ -202,10 +230,31 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
 
         <div
           onClick={() => onSelectCafe(featuredCafe)}
-          className="relative h-60 w-full rounded-[3rem] overflow-hidden shadow-2xl active:scale-[0.99] transition-all cursor-pointer group"
+          onTouchStart={onTouchStartContent}
+          onTouchMove={onTouchMoveContent}
+          onTouchEnd={onTouchEndContent}
+          className="relative h-60 w-full rounded-[3rem] overflow-hidden shadow-2xl active:scale-[0.99] transition-all cursor-pointer group select-none"
         >
-          <img src={featuredCafe.image} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-[2s]" alt={featuredCafe.name} />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+          <div className="absolute top-4 left-4 right-4 flex gap-1.5 z-20 pl-2 pr-2">
+            {cafes.slice(0, 5).map((_, idx) => (
+              <div
+                key={idx}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCarouselIndex(idx);
+                }}
+                className="flex-1 h-1.5 rounded-full cursor-pointer relative overflow-hidden bg-black/20 backdrop-blur-md"
+              >
+                {idx < carouselIndex && <div className="absolute inset-0 bg-white" />}
+                {idx === carouselIndex && <div key={`active-${carouselIndex}`} className="absolute inset-0 bg-white origin-left" style={{ animation: 'storyProgress 5s linear forwards' }} />}
+              </div>
+            ))}
+          </div>
+
+          {featuredCafe && (
+            <img src={featuredCafe.image} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-[2s]" alt={featuredCafe.name} />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent pointer-events-none" />
           <div className="absolute bottom-8 left-8 right-8">
             <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full border border-white/20 mb-3">
               <span className="text-[8px] font-black text-white uppercase tracking-widest">Günün Seçimi</span>
