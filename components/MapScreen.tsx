@@ -5,15 +5,14 @@ import Supercluster from 'supercluster';
 import { Cafe, MapState } from '../types';
 import { fetchNearbyCafesFromPlaces, haversineDistanceMeters } from '../services/places';
 
-const CATEGORY_SEARCH_TERMS: Record<string, string[]> = {
-  work: ['work', 'çalışma', 'laptop', 'priz', 'desk'],
-  view: ['manzara', 'deniz', 'teras', 'view'],
-  garden: ['bahçe', 'outdoor', 'terrace', 'açık hava'],
-  botanical: ['botanik', 'bitki', 'yeşil', 'plant', 'flora'],
-  creative: ['creative', 'konsept', 'sanat', 'art', 'design', 'ilham', 'yaratıcılık'],
-  bosphorus: ['boğaz', 'bosphorus', 'deniz manzarası'],
-  breakfast: ['kahvaltı', 'brunch', 'yumurta'],
-  filter: ['filtre', 'demleme', 'v60']
+const CATEGORY_TERMS: Record<string, string[]> = {
+  work: ['work', 'study', 'laptop', 'cowork', 'ofis', 'çalışma', 'wifi', 'internet'],
+  view: ['view', 'manzara', 'sea', 'deniz', 'sahil', 'terrace', 'teras', 'panorama'],
+  garden: ['garden', 'bahçe', 'outdoor', 'park', 'avlu', 'patio'],
+  botanical: ['botanik', 'botanical', 'flora', 'plant', 'bitki', 'green', 'yeşil'],
+  creative: ['creative', 'konsept', 'design', 'art', 'studio', 'galeri', 'atelier', 'vintage'],
+  breakfast: ['breakfast', 'brunch', 'kahvaltı', 'serpme', 'croissant', 'bakery', 'fırın'],
+  bosphorus: ['bosphorus', 'boğaz', 'sahil', 'bebek', 'ortaköy', 'arnavutköy', 'kuruçeşme']
 };
 
 const ROUTE_SOURCE_ID = 'route-source';
@@ -23,6 +22,55 @@ const CIRCLE_FILL_LAYER_ID = 'circle-fill';
 const CIRCLE_LINE_LAYER_ID = 'circle-line';
 
 const R = 6371000; // Earth radius in meters
+
+const textForCategory = (cafe: Cafe) => {
+  return [
+    cafe.name,
+    cafe.address,
+    cafe.description || '',
+    ...(cafe.amenities || []),
+    ...(cafe.placeTypes || [])
+  ]
+    .join(' ')
+    .toLowerCase();
+};
+
+const matchesCategory = (cafe: Cafe, filterId: string) => {
+  const searchable = textForCategory(cafe);
+  const terms = CATEGORY_TERMS[filterId] || [filterId];
+  const hasTermMatch = terms.some((term) => searchable.includes(term.toLowerCase()));
+  const placeTypes = (cafe.placeTypes || []).map((type) => type.toLowerCase());
+
+  if (filterId === 'work') {
+    const hasWorkType = placeTypes.some((type) =>
+      ['cafe', 'bakery', 'restaurant', 'food'].some((hint) => type.includes(hint))
+    );
+    const highSignal = cafe.rating >= 4.3 && cafe.reviews >= 40;
+    return hasTermMatch || (hasWorkType && highSignal);
+  }
+
+  if (filterId === 'breakfast') {
+    const hasBreakfastType = placeTypes.some((type) =>
+      ['bakery', 'breakfast', 'restaurant', 'meal_takeaway', 'food'].some((hint) => type.includes(hint))
+    );
+    return hasTermMatch || hasBreakfastType;
+  }
+
+  if (filterId === 'creative') {
+    const hasCreativeType = placeTypes.some((type) =>
+      ['art_gallery', 'book_store', 'museum'].some((hint) => type.includes(hint))
+    );
+    return hasTermMatch || hasCreativeType;
+  }
+
+  if (filterId === 'bosphorus') {
+    if (hasTermMatch) return true;
+    if (!cafe.coordinates) return false;
+    return cafe.coordinates.lat >= 40.99 && cafe.coordinates.lat <= 41.16 && cafe.coordinates.lng >= 28.95 && cafe.coordinates.lng <= 29.16;
+  }
+
+  return hasTermMatch;
+};
 
 function createCirclePolygon(lat: number, lng: number, radiusMeters: number): GeoJSON.Polygon {
   const points: [number, number][] = [];
@@ -144,20 +192,7 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
     let list = mapCafes;
     if (activeFilters.length > 0) {
       list = list.filter((cafe) =>
-        activeFilters.every((filterId) => {
-          // Special mapping for common needs to specific cafe props
-          if (filterId === 'work' && (cafe.powerOutlets || (cafe.wifiSpeed && parseInt(cafe.wifiSpeed) >= 50))) return true;
-          if (filterId === 'garden' && (cafe.hasGarden || cafe.amenities?.some(a => ['Outdoor', 'Garden', 'Bahçe'].includes(a)))) return true;
-
-          const terms = CATEGORY_SEARCH_TERMS[filterId] || [filterId];
-          return terms.some(
-            (term) =>
-              cafe.name.toLowerCase().includes(term.toLowerCase()) ||
-              cafe.description?.toLowerCase().includes(term.toLowerCase()) ||
-              cafe.amenities?.some((a) => a.toLowerCase().includes(term.toLowerCase())) ||
-              cafe.moods?.some((m) => m.toLowerCase().includes(term.toLowerCase()))
-          );
-        })
+        activeFilters.every((filterId) => matchesCategory(cafe, filterId))
       );
     }
     if (searchQuery.trim()) {
@@ -207,22 +242,18 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
     setIsLoading(true);
     setSearchError(null);
 
-    const keyword = activeFilters.map(f => {
-      const terms = CATEGORY_SEARCH_TERMS[f] || [];
-      return terms[0];
-    }).join(' ');
-
     try {
+      const fetchRadius = Math.max(selectedRadius, 2000);
       const results = await fetchNearbyCafesFromPlaces(
         circleCenter.lat,
         circleCenter.lng,
-        selectedRadius,
-        keyword || undefined
+        fetchRadius
       );
-      lastSearchRef.current = { lat: circleCenter.lat, lng: circleCenter.lng, radius: selectedRadius };
+      const withinSelectedRadius = filterByRadius(results, circleCenter, selectedRadius);
+      lastSearchRef.current = { lat: circleCenter.lat, lng: circleCenter.lng, radius: fetchRadius };
       setAllFetchedCafes(results);
-      setMapCafes(results);
-      if (results.length === 0) {
+      setMapCafes(withinSelectedRadius);
+      if (withinSelectedRadius.length === 0) {
         setSearchError("Bu bölgede uygun mekan bulunamadı.");
       }
     } catch (err: any) {
@@ -231,7 +262,7 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
     } finally {
       setIsLoading(false);
     }
-  }, [mapReady, circleCenter, selectedRadius, activeFilters, allFetchedCafes.length, filterByRadius]);
+  }, [mapReady, circleCenter, selectedRadius, allFetchedCafes.length, filterByRadius]);
 
   useEffect(() => {
     handleSearchRef.current = handleSearch;

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, MapPin, Wallet, Star, Sparkles, Coffee, Check, Target, SlidersHorizontal, Loader2, ExternalLink, RefreshCw, Clock, ChevronDown, Radio, Laptop, Leaf, Wifi, Utensils, Zap, MessageSquare, Mountain, Moon, Briefcase, Plus, BookOpen, ArrowRight, User, Timer, Ticket, Map, ChevronLeft, Heart, Trees, Sprout, Palette, Ship, Telescope, Wind, Flower2 } from 'lucide-react';
 import { CAFES, CAMPAIGNS, EDITOR_PICKS } from '../data';
 import { Cafe, CafeCollection, EditorPick, Campaign } from '../types';
-import { fetchDiscoveryCafes, haversineDistanceMeters } from '../services/places';
+import { fetchNearbyCafesFromPlaces, haversineDistanceMeters } from '../services/places';
 
 interface HomeScreenProps {
   onSelectCafe: (cafe: Cafe) => void;
@@ -15,46 +15,14 @@ interface HomeScreenProps {
 
 const DEFAULT_CENTER = { lat: 40.991, lng: 29.027 }; // Kadıköy
 
-const FILTER_KEYWORDS: Record<string, string[]> = {
-  work: [
-    'coworking cafe',
-    'study cafe',
-    'laptop friendly cafe',
-    'çalışma kahvesi'
-  ],
-  view: [
-    'sea view cafe',
-    'viewpoint cafe',
-    'terrace cafe',
-    'manzaralı kafe'
-  ],
-  garden: [
-    'garden cafe',
-    'outdoor cafe',
-    'bahçeli kafe'
-  ],
-  botanical: [
-    'botanical cafe',
-    'green cafe',
-    'bitkili kafe'
-  ],
-  creative: [
-    'art cafe',
-    'concept cafe',
-    'design cafe',
-    'konsept kafe'
-  ],
-  breakfast: [
-    'breakfast cafe',
-    'brunch cafe',
-    'kahvaltı kafe'
-  ],
-  bosphorus: [
-    'boğaz manzaralı kafe',
-    'bosphorus view cafe',
-    'bebek cafe',
-    'ortaköy cafe'
-  ]
+const CATEGORY_TERMS: Record<string, string[]> = {
+  work: ['work', 'study', 'laptop', 'cowork', 'ofis', 'çalışma', 'wifi', 'internet'],
+  view: ['view', 'manzara', 'sea', 'deniz', 'sahil', 'terrace', 'teras', 'panorama'],
+  garden: ['garden', 'bahçe', 'outdoor', 'park', 'avlu', 'patio'],
+  botanical: ['botanik', 'botanical', 'flora', 'plant', 'bitki', 'green', 'yeşil'],
+  creative: ['creative', 'konsept', 'design', 'art', 'studio', 'galeri', 'atelier', 'vintage'],
+  breakfast: ['breakfast', 'brunch', 'kahvaltı', 'serpme', 'croissant', 'bakery', 'fırın'],
+  bosphorus: ['bosphorus', 'boğaz', 'sahil', 'bebek', 'ortaköy', 'arnavutköy', 'kuruçeşme']
 };
 
 const sortByRatingThenReviews = (a: Cafe, b: Cafe) => {
@@ -62,18 +30,60 @@ const sortByRatingThenReviews = (a: Cafe, b: Cafe) => {
   return b.reviews - a.reviews;
 };
 
-const dedupeCafes = (cafes: Cafe[]) => {
-  const map = new Map<string, Cafe>();
-  cafes.forEach((cafe) => {
-    if (!map.has(cafe.id)) {
-      map.set(cafe.id, cafe);
-      return;
-    }
-    const existing = map.get(cafe.id)!;
-    if (sortByRatingThenReviews(cafe, existing) > 0) return;
-    map.set(cafe.id, cafe);
-  });
-  return Array.from(map.values());
+const withinRadius = (cafe: Cafe, center: { lat: number, lng: number }, radiusMeters: number) => {
+  if (!cafe.coordinates) return false;
+  const dist = haversineDistanceMeters(center.lat, center.lng, cafe.coordinates.lat, cafe.coordinates.lng);
+  return dist <= radiusMeters;
+};
+
+const textForCategory = (cafe: Cafe) => {
+  return [
+    cafe.name,
+    cafe.address,
+    cafe.description || '',
+    ...(cafe.amenities || []),
+    ...(cafe.placeTypes || [])
+  ]
+    .join(' ')
+    .toLowerCase();
+};
+
+const matchesCategory = (cafe: Cafe, filterId: string) => {
+  const searchable = textForCategory(cafe);
+  const terms = CATEGORY_TERMS[filterId] || [filterId];
+  const hasTermMatch = terms.some((term) => searchable.includes(term.toLowerCase()));
+  const placeTypes = (cafe.placeTypes || []).map((type) => type.toLowerCase());
+
+  if (filterId === 'work') {
+    const hasWorkType = placeTypes.some((type) =>
+      ['cafe', 'bakery', 'restaurant', 'food'].some((hint) => type.includes(hint))
+    );
+    const highSignal = cafe.rating >= 4.3 && cafe.reviews >= 40;
+    return hasTermMatch || (hasWorkType && highSignal);
+  }
+
+  if (filterId === 'breakfast') {
+    const hasBreakfastType = placeTypes.some((type) =>
+      ['bakery', 'breakfast', 'restaurant', 'meal_takeaway', 'food'].some((hint) => type.includes(hint))
+    );
+    return hasTermMatch || hasBreakfastType;
+  }
+
+  if (filterId === 'creative') {
+    const hasCreativeType = placeTypes.some((type) =>
+      ['art_gallery', 'book_store', 'museum'].some((hint) => type.includes(hint))
+    );
+    return hasTermMatch || hasCreativeType;
+  }
+
+  if (filterId === 'bosphorus') {
+    if (hasTermMatch) return true;
+    if (!cafe.coordinates) return false;
+    // Approximate Bosphorus shoreline band in Istanbul
+    return cafe.coordinates.lat >= 40.99 && cafe.coordinates.lat <= 41.16 && cafe.coordinates.lng >= 28.95 && cafe.coordinates.lng <= 29.16;
+  }
+
+  return hasTermMatch;
 };
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onSelectCollection, onSelectArticle, cafes, userLocation }) => {
@@ -146,34 +156,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
     const fetchFilteredDiscovery = async () => {
       setDiscoveryLoading(true);
       try {
-        if (activeFilters.length === 0) {
-          const fetched = await fetchDiscoveryCafes(center.lat, center.lng, 500);
-          if (!cancelled) setDiscoveryCafes(fetched);
-          return;
-        }
-
-        const perFilterResults = await Promise.all(
-          activeFilters.map(async (filterId) => {
-            const keywords = FILTER_KEYWORDS[filterId] || [filterId];
-            const keywordResults = await Promise.all(
-              keywords.map((keyword) => fetchDiscoveryCafes(center.lat, center.lng, 500, keyword))
-            );
-            return dedupeCafes(keywordResults.flat()).sort(sortByRatingThenReviews);
-          })
-        );
-
-        const intersectionIds = perFilterResults.reduce<Set<string>>((acc, list, idx) => {
-          const ids = new Set(list.map((cafe) => cafe.id));
-          if (idx === 0) return ids;
-          return new Set(Array.from(acc).filter((id) => ids.has(id)));
-        }, new Set<string>());
-
-        const merged = dedupeCafes(perFilterResults.flat());
-        const filtered = merged
-          .filter((cafe) => intersectionIds.has(cafe.id))
-          .sort(sortByRatingThenReviews);
-
-        if (!cancelled) setDiscoveryCafes(filtered);
+        // Pull a richer local pool once, then classify client-side with category rules.
+        const fetched = await fetchNearbyCafesFromPlaces(center.lat, center.lng, 1500);
+        if (!cancelled) setDiscoveryCafes(fetched);
       } catch {
         if (!cancelled) setDiscoveryCafes([]);
       } finally {
@@ -186,7 +171,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
     return () => {
       cancelled = true;
     };
-  }, [activeFilters, userLocation?.lat, userLocation?.lng]);
+  }, [userLocation?.lat, userLocation?.lng]);
 
   useEffect(() => {
     const clockInterval = setInterval(() => {
@@ -313,17 +298,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
   };
 
   const nearbyCafes = useMemo(() => {
+    const center = userLocation || DEFAULT_CENTER;
     return discoveryCafes
-      .filter(cafe => {
-        // Strict distance guard (API already queried at 500m, but keep exact check)
-        if (!cafe.coordinates) return false;
-
-        const center = userLocation || DEFAULT_CENTER;
-        const dist = haversineDistanceMeters(center.lat, center.lng, cafe.coordinates.lat, cafe.coordinates.lng);
-        return dist <= 500;
-      })
+      .filter((cafe) => withinRadius(cafe, center, 500))
+      .filter((cafe) => activeFilters.every((filterId) => matchesCategory(cafe, filterId)))
       .sort(sortByRatingThenReviews);
-  }, [discoveryCafes, userLocation]);
+  }, [activeFilters, discoveryCafes, userLocation]);
 
   const featuredCafe = cafes[carouselIndex] || cafes[0];
   const getCafeData = (id: string) => cafes.find(c => c.id === id);

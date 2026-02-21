@@ -175,6 +175,83 @@ export async function fetchNearbyCafesFromPlaces(
   });
 }
 
+/**
+ * Category-like searches (e.g. "bahceli kafe", "coworking cafe") are more reliable
+ * with textSearch than nearbySearch+keyword.
+ */
+export async function fetchTextSearchCafes(
+  lat: number,
+  lng: number,
+  radiusMeters: number,
+  query: string
+): Promise<Cafe[]> {
+  const roundedLat = Number(lat.toFixed(4));
+  const roundedLng = Number(lng.toFixed(4));
+  const normalizedQuery = query.trim().toLowerCase();
+  const cacheKey = `text:${roundedLat},${roundedLng},${radiusMeters},${normalizedQuery}`;
+
+  const cached = CACHE.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    console.log(`[PlacesService] Text cache HIT for key: ${cacheKey}`);
+    return cached.cafes;
+  }
+
+  console.log(`[PlacesService] Text cache MISS. Fetching from API: ${cacheKey}`);
+
+  await loadGoogleMapsScript().catch(err => {
+    console.error(err);
+    throw err;
+  });
+
+  const google = window.google;
+  if (!google?.maps?.places) return [];
+
+  const mapDiv = document.createElement('div');
+  const map = new google.maps.Map(mapDiv, {
+    center: { lat, lng },
+    zoom: 15,
+  });
+  const service = new google.maps.places.PlacesService(map);
+
+  return new Promise((resolve) => {
+    const request: google.maps.places.TextSearchRequest = {
+      location: new google.maps.LatLng(lat, lng),
+      radius: radiusMeters,
+      query: normalizedQuery
+    };
+
+    service.textSearch(request, (results, status) => {
+      if (status !== google.maps.places.PlacesServiceStatus.OK || !results) {
+        resolve([]);
+        return;
+      }
+
+      const cafes = results
+        .filter((p): p is google.maps.places.PlaceResult => p != null && (p.user_ratings_total ?? 0) > 0)
+        .map((p) => placeResultToCafe(p, lat, lng))
+        .filter((cafe) => {
+          const normalizedTypes = (cafe.placeTypes || []).map((t) => t.toLowerCase());
+          const isCafeLike = normalizedTypes.some((t) =>
+            t.includes('cafe') || t.includes('coffee') || t.includes('bakery')
+          );
+          const normalizedName = cafe.name.toLowerCase();
+          return isCafeLike || normalizedName.includes('cafe') || normalizedName.includes('kahve');
+        })
+        .sort((a, b) => {
+          if (b.rating !== a.rating) return b.rating - a.rating;
+          return b.reviews - a.reviews;
+        });
+
+      CACHE.set(cacheKey, {
+        cafes,
+        timestamp: Date.now()
+      });
+
+      resolve(cafes);
+    });
+  });
+}
+
 const DISCOVERY_CACHE_KEY = 'loca_discovery_cache';
 const DISCOVERY_TTL_MS = 60 * 60 * 1000; // 1 saat
 
