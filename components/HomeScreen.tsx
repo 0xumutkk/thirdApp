@@ -110,7 +110,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
       { id: 'view', label: 'Manzara', icon: <Mountain className="w-3.5 h-3.5" />, color: '#BC4749' },
       { id: 'garden', label: 'Bahçe', icon: <Trees className="w-3.5 h-3.5" />, color: '#BC4749' },
       { id: 'botanical', label: 'Botanik', icon: <Sprout className="w-3.5 h-3.5" />, color: '#BC4749' },
-      { id: 'creative', label: 'Konsept', icon: <Palette className="w-3.5 h-3.5" />, color: '#BC4749' }
+      { id: 'creative', label: 'Konsept', icon: <Palette className="w-3.5 h-3.5" />, color: '#BC4749' },
+      { id: 'breakfast', label: 'Kahvaltı', icon: <Utensils className="w-3.5 h-3.5" />, color: '#BC4749' }
     ];
     if (isIstanbul) {
       base.push({ id: 'bosphorus', label: 'Boğaz', icon: <Ship className="w-3.5 h-3.5" />, color: '#BC4749' });
@@ -195,7 +196,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
             onClick={() => onOpenWallet()}
             className="w-14 h-14 bg-white/70 backdrop-blur-xl border border-white/40 shadow-xl rounded-[2rem] flex items-center justify-center text-[#1B4332] active:scale-90 transition-all cursor-pointer relative z-10"
           >
-            <Wallet className="w-6 h-6 stroke-[1.5]" />
+            <img src="/assets/logo.svg" alt="Logo" className="w-8 h-8" />
           </button>
         </div>
 

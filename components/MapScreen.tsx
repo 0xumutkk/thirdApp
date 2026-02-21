@@ -94,6 +94,7 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
   const mapStateRef = useRef<MapState | null>(null);
   const routeToCafeRef = useRef<Cafe | null>(null);
   const handleSearchRef = useRef<() => void>(() => { });
+  const renderMarkersRef = useRef<() => void>(() => { });
   const mapLoadTimeRef = useRef<number>(0);
 
   useEffect(() => {
@@ -372,6 +373,10 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
   }, [onSelectCafe, filteredCafes, selectedRadius]);
 
   useEffect(() => {
+    renderMarkersRef.current = renderMarkers;
+  }, [renderMarkers]);
+
+  useEffect(() => {
     if (!mapContainer.current) return;
     setMapReady(false);
 
@@ -462,7 +467,7 @@ const MapScreen: React.FC<MapScreenProps> = ({ onSelectCafe, cafes, userLocation
 
     map.on('moveend', () => {
       if (Date.now() - mapLoadTimeRef.current < 3500) return;
-      if (clusterIndex.current && mapInstance.current?.isStyleLoaded()) renderMarkers();
+      if (clusterIndex.current && mapInstance.current?.isStyleLoaded()) renderMarkersRef.current();
     });
 
     return () => {

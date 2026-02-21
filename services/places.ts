@@ -157,7 +157,7 @@ export async function fetchNearbyCafesFromPlaces(
         return;
       }
       const cafes = results
-        .filter((p): p is google.maps.places.PlaceResult => p != null)
+        .filter((p): p is google.maps.places.PlaceResult => p != null && (p.user_ratings_total ?? 0) > 0)
         .map((p) => placeResultToCafe(p, lat, lng))
         .sort((a, b) => {
           if (b.rating !== a.rating) return b.rating - a.rating;
