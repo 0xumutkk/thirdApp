@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Heart, Star, MapPin, ArrowRight, ChevronDown, Sparkles, Map, Pause, Play, LayoutGrid } from 'lucide-react';
 import { CAFES, COLLECTIONS } from '../data';
 import { Cafe, CafeCollection } from '../types';
@@ -8,6 +8,16 @@ interface FavoritesScreenProps {
   onSelectCollection: (collection: CafeCollection) => void;
   cafes?: Cafe[];
 }
+
+type StoryTransitionDirection = 'next' | 'prev';
+
+interface StoryTransitionState {
+  fromId: string;
+  toId: string;
+  direction: StoryTransitionDirection;
+}
+
+const CARD_TRANSITION_MS = 320;
 
 const FavoritesScreen: React.FC<FavoritesScreenProps> = ({ onSelectCafe, onSelectCollection, cafes }) => {
   const [currentLocation, setCurrentLocation] = useState("İstanbul");
@@ -20,17 +30,33 @@ const FavoritesScreen: React.FC<FavoritesScreenProps> = ({ onSelectCafe, onSelec
   const [activeCollectionId, setActiveCollectionId] = useState(dynamicCollections[0]?.id ?? '');
   const [isPaused, setIsPaused] = useState(false);
   const [showSpotlightView, setShowSpotlightView] = useState(false);
+  const [dragStart, setDragStart] = useState<number | null>(null);
+  const [dragEnd, setDragEnd] = useState<number | null>(null);
+  const [storyTransition, setStoryTransition] = useState<StoryTransitionState | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
+  const transitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeCollection = dynamicCollections.find(c => c.id === activeCollectionId) || dynamicCollections[0];
   const activeCollectionIndex = dynamicCollections.findIndex(c => c.id === activeCollectionId);
 
+  const clearTransitionTimeout = useCallback(() => {
+    if (!transitionTimeoutRef.current) return;
+    clearTimeout(transitionTimeoutRef.current);
+    transitionTimeoutRef.current = null;
+  }, []);
+
   useEffect(() => {
     const stillExists = dynamicCollections.some(c => c.id === activeCollectionId);
     if (!stillExists && dynamicCollections.length > 0) {
+      setStoryTransition(null);
       setActiveCollectionId(dynamicCollections[0].id);
     }
   }, [currentLocation, dynamicCollections, activeCollectionId]);
+
+  useEffect(() => {
+    return () => clearTransitionTimeout();
+  }, [clearTransitionTimeout]);
 
   const tabsRef = useRef<HTMLDivElement>(null);
 
@@ -45,9 +71,114 @@ const FavoritesScreen: React.FC<FavoritesScreenProps> = ({ onSelectCafe, onSelec
     }
   }, [activeCollectionId]);
 
-  const handleNextCollection = () => {
-    const nextIndex = (activeCollectionIndex + 1) % dynamicCollections.length;
-    setActiveCollectionId(dynamicCollections[nextIndex]?.id ?? '');
+  const navigateToCollection = useCallback((targetId: string, direction?: StoryTransitionDirection) => {
+    if (dynamicCollections.length === 0 || !targetId || targetId === activeCollectionId) return;
+
+    const currentIndex = activeCollectionIndex >= 0 ? activeCollectionIndex : 0;
+    const targetIndex = dynamicCollections.findIndex(c => c.id === targetId);
+    if (targetIndex < 0) return;
+
+    const fromId = dynamicCollections[currentIndex]?.id ?? activeCollectionId ?? targetId;
+    const resolvedDirection = direction ?? (targetIndex >= currentIndex ? 'next' : 'prev');
+
+    setStoryTransition({
+      fromId,
+      toId: targetId,
+      direction: resolvedDirection
+    });
+    setActiveCollectionId(targetId);
+    clearTransitionTimeout();
+    transitionTimeoutRef.current = setTimeout(() => {
+      setStoryTransition((prev) => (prev?.toId === targetId ? null : prev));
+      transitionTimeoutRef.current = null;
+    }, CARD_TRANSITION_MS);
+  }, [activeCollectionId, activeCollectionIndex, clearTransitionTimeout, dynamicCollections]);
+
+  const handleNextCollection = useCallback(() => {
+    if (dynamicCollections.length === 0) return;
+    const currentIndex = activeCollectionIndex >= 0 ? activeCollectionIndex : 0;
+    const nextIndex = (currentIndex + 1) % dynamicCollections.length;
+    navigateToCollection(dynamicCollections[nextIndex]?.id ?? '', 'next');
+  }, [activeCollectionIndex, dynamicCollections, navigateToCollection]);
+
+  const handlePreviousCollection = useCallback(() => {
+    if (dynamicCollections.length === 0) return;
+    const currentIndex = activeCollectionIndex >= 0 ? activeCollectionIndex : 0;
+    const prevIndex = currentIndex === 0 ? dynamicCollections.length - 1 : currentIndex - 1;
+    navigateToCollection(dynamicCollections[prevIndex]?.id ?? '', 'prev');
+  }, [activeCollectionIndex, dynamicCollections, navigateToCollection]);
+
+  const handleSelectCollectionByIndex = useCallback((index: number) => {
+    const selected = dynamicCollections[index];
+    if (!selected) return;
+    const currentIndex = activeCollectionIndex >= 0 ? activeCollectionIndex : 0;
+    if (index === currentIndex) return;
+    navigateToCollection(selected.id, index > currentIndex ? 'next' : 'prev');
+  }, [activeCollectionIndex, dynamicCollections, navigateToCollection]);
+
+  const handleSwipeEnd = useCallback((finalClientX?: number) => {
+    const endPoint = finalClientX ?? dragEnd;
+    if (dragStart === null || endPoint === null) {
+      setDragStart(null);
+      setDragEnd(null);
+      isDraggingRef.current = false;
+      return;
+    }
+
+    const distance = dragStart - endPoint;
+    const isLeftSwipe = distance > 50;
+    const isRightSwipe = distance < -50;
+
+    if (isLeftSwipe) {
+      handleNextCollection();
+      isDraggingRef.current = true;
+    } else if (isRightSwipe) {
+      handlePreviousCollection();
+      isDraggingRef.current = true;
+    }
+
+    setDragStart(null);
+    setDragEnd(null);
+  }, [dragStart, dragEnd, handleNextCollection, handlePreviousCollection]);
+
+  const onTouchStartSpotlight = (e: React.TouchEvent<HTMLDivElement>) => {
+    setDragEnd(null);
+    setDragStart(e.targetTouches[0].clientX);
+    isDraggingRef.current = false;
+  };
+
+  const onTouchMoveSpotlight = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (dragStart !== null) {
+      setDragEnd(e.targetTouches[0].clientX);
+      if (Math.abs(e.targetTouches[0].clientX - dragStart) > 10) {
+        isDraggingRef.current = true;
+      }
+    }
+  };
+
+  const onMouseDownSpotlight = (e: React.MouseEvent<HTMLDivElement>) => {
+    setDragEnd(null);
+    setDragStart(e.clientX);
+    isDraggingRef.current = false;
+  };
+
+  const onMouseMoveSpotlight = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (dragStart !== null) {
+      setDragEnd(e.clientX);
+      if (Math.abs(e.clientX - dragStart) > 10) {
+        isDraggingRef.current = true;
+      }
+    }
+  };
+
+  const handleSpotlightCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isDraggingRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      isDraggingRef.current = false;
+      return;
+    }
+    if (activeCollection) onSelectCollection(activeCollection);
   };
 
   const handleToggleView = () => {
@@ -56,6 +187,18 @@ const FavoritesScreen: React.FC<FavoritesScreenProps> = ({ onSelectCafe, onSelec
   };
 
   const favoritesToShow = showSpotlightView ? favoriteCafes.slice(0, 2) : favoriteCafes;
+  const transitionFromCollection = storyTransition
+    ? dynamicCollections.find(c => c.id === storyTransition.fromId)
+    : null;
+  const transitionToCollection = storyTransition
+    ? dynamicCollections.find(c => c.id === storyTransition.toId) || activeCollection
+    : activeCollection;
+  const transitionFromIndex = storyTransition
+    ? dynamicCollections.findIndex(c => c.id === storyTransition.fromId)
+    : activeCollectionIndex;
+  const transitionToIndex = storyTransition
+    ? dynamicCollections.findIndex(c => c.id === storyTransition.toId)
+    : activeCollectionIndex;
 
   const FavoriteCafeCard: React.FC<{ cafe: Cafe }> = ({ cafe }) => (
     <div
@@ -143,7 +286,7 @@ const FavoritesScreen: React.FC<FavoritesScreenProps> = ({ onSelectCafe, onSelec
               <button
                 key={col.id}
                 data-active={isActive ? "true" : "false"}
-                onClick={() => { setActiveCollectionId(col.id); }}
+                onClick={() => { navigateToCollection(col.id); }}
                 className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap border ${isActive
                   ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-md scale-105'
                   : 'bg-white text-gray-400 border-gray-100'
@@ -158,16 +301,57 @@ const FavoritesScreen: React.FC<FavoritesScreenProps> = ({ onSelectCafe, onSelec
         {/* Single Spotlight Card */}
         <div className="px-8 pb-8 perspective-1000">
           <div
-            className="w-full aspect-[4/5] relative rounded-[3rem] shadow-2xl overflow-hidden cursor-pointer group active:scale-[0.98] transition-all duration-500 ease-out"
-            onClick={() => onSelectCollection(activeCollection)}
+            className="w-full aspect-[4/5] relative rounded-[3rem] shadow-2xl overflow-hidden cursor-pointer group active:scale-[0.98] transition-all duration-500 ease-out select-none touch-pan-y"
+            onClick={handleSpotlightCardClick}
+            onTouchStart={onTouchStartSpotlight}
+            onTouchMove={onTouchMoveSpotlight}
+            onTouchEnd={(e) => handleSwipeEnd(e.changedTouches[0]?.clientX)}
+            onMouseDown={onMouseDownSpotlight}
+            onMouseMove={onMouseMoveSpotlight}
+            onMouseUp={(e) => handleSwipeEnd(e.clientX)}
+            onMouseLeave={() => handleSwipeEnd()}
           >
-            <SpotlightCardContent
-              collection={activeCollection}
-              collectionIndex={activeCollectionIndex}
-              totalCollections={dynamicCollections.length}
-              isPaused={isPaused}
-              onStoryEnd={handleNextCollection}
-            />
+            {storyTransition && transitionFromCollection && transitionToCollection ? (
+              <>
+                <div
+                  className={`absolute inset-0 pointer-events-none ${storyTransition.direction === 'next' ? 'animate-story-card-out-next' : 'animate-story-card-out-prev'
+                    }`}
+                >
+                  <SpotlightCardContent
+                    collection={transitionFromCollection}
+                    collectionIndex={transitionFromIndex >= 0 ? transitionFromIndex : 0}
+                    totalCollections={dynamicCollections.length}
+                    isPaused={isPaused}
+                    onStoryEnd={handleNextCollection}
+                    onProgressSelect={handleSelectCollectionByIndex}
+                    isInteractive={false}
+                    showProgress={false}
+                  />
+                </div>
+                <div
+                  className={`absolute inset-0 ${storyTransition.direction === 'next' ? 'animate-story-card-in-next' : 'animate-story-card-in-prev'
+                    }`}
+                >
+                  <SpotlightCardContent
+                    collection={transitionToCollection}
+                    collectionIndex={transitionToIndex >= 0 ? transitionToIndex : 0}
+                    totalCollections={dynamicCollections.length}
+                    isPaused={isPaused}
+                    onStoryEnd={handleNextCollection}
+                    onProgressSelect={handleSelectCollectionByIndex}
+                  />
+                </div>
+              </>
+            ) : (
+              <SpotlightCardContent
+                collection={activeCollection}
+                collectionIndex={activeCollectionIndex >= 0 ? activeCollectionIndex : 0}
+                totalCollections={dynamicCollections.length}
+                isPaused={isPaused}
+                onStoryEnd={handleNextCollection}
+                onProgressSelect={handleSelectCollectionByIndex}
+              />
+            )}
           </div>
         </div>
 
@@ -185,7 +369,19 @@ const SpotlightCardContent: React.FC<{
   totalCollections: number;
   isPaused: boolean;
   onStoryEnd: () => void;
-}> = ({ collection, collectionIndex, totalCollections, isPaused, onStoryEnd }) => {
+  onProgressSelect: (index: number) => void;
+  isInteractive?: boolean;
+  showProgress?: boolean;
+}> = ({
+  collection,
+  collectionIndex,
+  totalCollections,
+  isPaused,
+  onStoryEnd,
+  onProgressSelect,
+  isInteractive = true,
+  showProgress = true
+}) => {
   const [imageProgress, setImageProgress] = useState(0);
 
   // Reset progress when collection changes
@@ -195,6 +391,7 @@ const SpotlightCardContent: React.FC<{
 
   // Handle progression for the current collection (one slide per filter)
   useEffect(() => {
+    if (!isInteractive || totalCollections === 0) return;
     if (isPaused) return;
 
     const startTime = Date.now();
@@ -213,7 +410,7 @@ const SpotlightCardContent: React.FC<{
       clearInterval(interval);
       clearTimeout(timeout);
     };
-  }, [collection.id, isPaused, onStoryEnd]);
+  }, [collection.id, isPaused, isInteractive, onStoryEnd, totalCollections]);
 
   return (
     <>
@@ -233,18 +430,33 @@ const SpotlightCardContent: React.FC<{
       <div className="absolute inset-0 bg-gradient-to-r from-black/40 to-transparent" />
 
       {/* Progress Bar (Story Style) - Now reflects filters, not inner images */}
-      <div className="absolute top-6 left-6 right-6 flex gap-1.5 z-20">
-        {Array.from({ length: totalCollections }).map((_, idx) => (
-          <div key={idx} className="h-1 flex-1 bg-white/20 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-white rounded-full transition-[width] duration-75 ease-linear"
-              style={{
-                width: idx < collectionIndex ? '100%' : idx === collectionIndex ? `${imageProgress}%` : '0%'
+      {showProgress && (
+        <div className="absolute top-6 left-6 right-6 flex gap-1.5 z-20">
+          {Array.from({ length: totalCollections }).map((_, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onTouchStart={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onProgressSelect(idx);
               }}
-            />
-          </div>
-        ))}
-      </div>
+              className="h-4 flex-1 flex items-center cursor-pointer"
+              aria-label={`${idx + 1}. kartı göster`}
+            >
+              <span className="h-1 w-full bg-white/20 rounded-full overflow-hidden">
+                <span
+                  className="h-full block bg-white rounded-full transition-[width] duration-75 ease-linear"
+                  style={{
+                    width: idx < collectionIndex ? '100%' : idx === collectionIndex ? `${imageProgress}%` : '0%'
+                  }}
+                />
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Floating Sentiment Badge */}
       <div className="absolute top-10 right-6 animate-page-in delay-100 z-20">

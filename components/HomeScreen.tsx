@@ -15,6 +15,67 @@ interface HomeScreenProps {
 
 const DEFAULT_CENTER = { lat: 40.991, lng: 29.027 }; // Kadıköy
 
+const FILTER_KEYWORDS: Record<string, string[]> = {
+  work: [
+    'coworking cafe',
+    'study cafe',
+    'laptop friendly cafe',
+    'çalışma kahvesi'
+  ],
+  view: [
+    'sea view cafe',
+    'viewpoint cafe',
+    'terrace cafe',
+    'manzaralı kafe'
+  ],
+  garden: [
+    'garden cafe',
+    'outdoor cafe',
+    'bahçeli kafe'
+  ],
+  botanical: [
+    'botanical cafe',
+    'green cafe',
+    'bitkili kafe'
+  ],
+  creative: [
+    'art cafe',
+    'concept cafe',
+    'design cafe',
+    'konsept kafe'
+  ],
+  breakfast: [
+    'breakfast cafe',
+    'brunch cafe',
+    'kahvaltı kafe'
+  ],
+  bosphorus: [
+    'boğaz manzaralı kafe',
+    'bosphorus view cafe',
+    'bebek cafe',
+    'ortaköy cafe'
+  ]
+};
+
+const sortByRatingThenReviews = (a: Cafe, b: Cafe) => {
+  if (b.rating !== a.rating) return b.rating - a.rating;
+  return b.reviews - a.reviews;
+};
+
+const dedupeCafes = (cafes: Cafe[]) => {
+  const map = new Map<string, Cafe>();
+  cafes.forEach((cafe) => {
+    if (!map.has(cafe.id)) {
+      map.set(cafe.id, cafe);
+      return;
+    }
+    const existing = map.get(cafe.id)!;
+    if (sortByRatingThenReviews(cafe, existing) > 0) return;
+    map.set(cafe.id, cafe);
+  });
+  return Array.from(map.values());
+};
+
 const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onSelectCollection, onSelectArticle, cafes, userLocation }) => {
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
@@ -25,8 +86,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
   const [discoveryCafes, setDiscoveryCafes] = useState<Cafe[]>([]);
   const [discoveryLoading, setDiscoveryLoading] = useState(false);
 
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const [dragStart, setDragStart] = useState<number | null>(null);
+  const [dragEnd, setDragEnd] = useState<number | null>(null);
+  const isDraggingRef = useRef(false);
 
   const lastFetchTimeRef = useRef<number>(0);
 
@@ -79,12 +141,52 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
 
   useEffect(() => {
     const center = userLocation || DEFAULT_CENTER;
-    setDiscoveryLoading(true);
-    fetchDiscoveryCafes(center.lat, center.lng, 500)
-      .then((fetched) => setDiscoveryCafes(fetched))
-      .catch(() => setDiscoveryCafes([]))
-      .finally(() => setDiscoveryLoading(false));
-  }, [userLocation?.lat, userLocation?.lng]);
+    let cancelled = false;
+
+    const fetchFilteredDiscovery = async () => {
+      setDiscoveryLoading(true);
+      try {
+        if (activeFilters.length === 0) {
+          const fetched = await fetchDiscoveryCafes(center.lat, center.lng, 500);
+          if (!cancelled) setDiscoveryCafes(fetched);
+          return;
+        }
+
+        const perFilterResults = await Promise.all(
+          activeFilters.map(async (filterId) => {
+            const keywords = FILTER_KEYWORDS[filterId] || [filterId];
+            const keywordResults = await Promise.all(
+              keywords.map((keyword) => fetchDiscoveryCafes(center.lat, center.lng, 500, keyword))
+            );
+            return dedupeCafes(keywordResults.flat()).sort(sortByRatingThenReviews);
+          })
+        );
+
+        const intersectionIds = perFilterResults.reduce<Set<string>>((acc, list, idx) => {
+          const ids = new Set(list.map((cafe) => cafe.id));
+          if (idx === 0) return ids;
+          return new Set(Array.from(acc).filter((id) => ids.has(id)));
+        }, new Set<string>());
+
+        const merged = dedupeCafes(perFilterResults.flat());
+        const filtered = merged
+          .filter((cafe) => intersectionIds.has(cafe.id))
+          .sort(sortByRatingThenReviews);
+
+        if (!cancelled) setDiscoveryCafes(filtered);
+      } catch {
+        if (!cancelled) setDiscoveryCafes([]);
+      } finally {
+        if (!cancelled) setDiscoveryLoading(false);
+      }
+    };
+
+    fetchFilteredDiscovery();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeFilters, userLocation?.lat, userLocation?.lng]);
 
   useEffect(() => {
     const clockInterval = setInterval(() => {
@@ -104,17 +206,50 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
   }, [cafes.length, carouselIndex]);
 
   const onTouchStartContent = (e: React.TouchEvent) => {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
+    setDragEnd(null);
+    setDragStart(e.targetTouches[0].clientX);
+    isDraggingRef.current = false;
   };
 
   const onTouchMoveContent = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX);
+    if (dragStart !== null) {
+      setDragEnd(e.targetTouches[0].clientX);
+      if (Math.abs(e.targetTouches[0].clientX - dragStart) > 10) {
+        isDraggingRef.current = true;
+      }
+    }
   };
 
   const onTouchEndContent = () => {
-    if (!touchStart || !touchEnd) return;
-    const distance = touchStart - touchEnd;
+    handleSwipeEnd();
+  };
+
+  const onMouseDownContent = (e: React.MouseEvent) => {
+    setDragEnd(null);
+    setDragStart(e.clientX);
+    isDraggingRef.current = false;
+  };
+
+  const onMouseMoveContent = (e: React.MouseEvent) => {
+    if (dragStart !== null) {
+      setDragEnd(e.clientX);
+      if (Math.abs(e.clientX - dragStart) > 10) {
+        isDraggingRef.current = true;
+      }
+    }
+  };
+
+  const onMouseUpContent = () => {
+    handleSwipeEnd();
+  };
+
+  const handleSwipeEnd = () => {
+    if (!dragStart || !dragEnd) {
+      setDragStart(null);
+      setDragEnd(null);
+      return;
+    }
+    const distance = dragStart - dragEnd;
     const isLeftSwipe = distance > 50;
     const isRightSwipe = distance < -50;
     const maxItems = Math.min(cafes.length || 1, 5);
@@ -124,6 +259,21 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
     } else if (isRightSwipe) {
       setCarouselIndex((prev) => (prev === 0 ? maxItems - 1 : prev - 1));
     }
+
+    setDragStart(null);
+    setDragEnd(null);
+    setTimeout(() => {
+      isDraggingRef.current = false;
+    }, 100);
+  };
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    if (isDraggingRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    if (featuredCafe) onSelectCafe(featuredCafe);
   };
 
   const isIstanbul = useMemo(() => {
@@ -162,51 +312,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
     }, 1500);
   };
 
-  const baseCafes = discoveryCafes.length > 0 ? discoveryCafes : cafes;
-
   const nearbyCafes = useMemo(() => {
-    const searchTerms: Record<string, string[]> = {
-      work: ['work', 'çalışma', 'laptop', 'priz', 'desk', 'coffee', 'kahve', 'coworking', 'study', 'wifi', 'çalışma alanı'],
-      view: ['manzara', 'deniz', 'teras', 'view', 'viewpoint'],
-      garden: ['bahçe', 'outdoor', 'terrace', 'açık hava', 'garden', 'bostan', 'yeşil', 'park', 'teras'],
-      botanical: ['botanik', 'bitki', 'yeşil', 'plant', 'flora'],
-      creative: ['creative', 'konsept', 'sanat', 'art', 'design', 'ilham', 'yaratıcılık'],
-      bosphorus: ['boğaz', 'bosphorus', 'deniz manzarası', 'bebek', 'ortaköy', 'arnavutköy', 'kuruçeşme', 'etiler'],
-      breakfast: ['kahvaltı', 'brunch', 'yumurta'],
-      filter: ['filtre', 'demleme', 'v60']
-    };
+    return discoveryCafes
+      .filter(cafe => {
+        // Strict distance guard (API already queried at 500m, but keep exact check)
+        if (!cafe.coordinates) return false;
 
-    return baseCafes.filter(cafe => {
-      // 1. Strict Distance Filter (500m)
-      const center = userLocation || DEFAULT_CENTER;
-      if (cafe.coordinates) {
+        const center = userLocation || DEFAULT_CENTER;
         const dist = haversineDistanceMeters(center.lat, center.lng, cafe.coordinates.lat, cafe.coordinates.lng);
-        if (dist > 500) return false;
-      }
-
-      // 2. Active Category Filters
-      if (activeFilters.length === 0) return true;
-
-      return activeFilters.every(filterId => {
-        // work: powerOutlets/wifiSpeed first, then keyword fallback for Places API cafes
-        if (filterId === 'work' && (cafe.powerOutlets || (cafe.wifiSpeed && parseInt(String(cafe.wifiSpeed)) >= 50))) return true;
-
-        // garden: hasGarden/amenities first, then keyword fallback for Places API cafes
-        if (filterId === 'garden' && (cafe.hasGarden || cafe.amenities?.some(a => ['Outdoor', 'Garden', 'Bahçe'].includes(a)))) return true;
-
-        const terms = searchTerms[filterId] || [filterId];
-        const searchable = [
-          cafe.name,
-          cafe.address,
-          cafe.description || '',
-          ...(cafe.amenities || []),
-          ...(cafe.moods || []),
-          ...(cafe.placeTypes || [])
-        ].join(' ').toLowerCase();
-        return terms.some(term => searchable.includes(term.toLowerCase()));
-      });
-    });
-  }, [activeFilters, baseCafes, userLocation]);
+        return dist <= 500;
+      })
+      .sort(sortByRatingThenReviews);
+  }, [discoveryCafes, userLocation]);
 
   const featuredCafe = cafes[carouselIndex] || cafes[0];
   const getCafeData = (id: string) => cafes.find(c => c.id === id);
@@ -229,24 +346,37 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectCafe, onOpenWallet, onS
         </div>
 
         <div
-          onClick={() => onSelectCafe(featuredCafe)}
+          onClickCapture={handleCardClick}
           onTouchStart={onTouchStartContent}
           onTouchMove={onTouchMoveContent}
           onTouchEnd={onTouchEndContent}
-          className="relative h-60 w-full rounded-[3rem] overflow-hidden shadow-2xl active:scale-[0.99] transition-all cursor-pointer group select-none"
+          onMouseDown={onMouseDownContent}
+          onMouseMove={onMouseMoveContent}
+          onMouseUp={onMouseUpContent}
+          onMouseLeave={onMouseUpContent}
+          className="relative h-60 w-full rounded-[3rem] overflow-hidden shadow-2xl active:scale-[0.99] transition-all cursor-pointer group select-none touch-pan-y"
         >
-          <div className="absolute top-4 left-4 right-4 flex gap-1.5 z-20 pl-2 pr-2">
+          <div className="absolute top-4 left-4 right-4 flex gap-1.5 z-30 h-8 items-start">
             {cafes.slice(0, 5).map((_, idx) => (
               <div
                 key={idx}
+                onTouchStart={(e) => {
+                  e.stopPropagation();
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                }}
                 onClick={(e) => {
                   e.stopPropagation();
+                  e.preventDefault();
                   setCarouselIndex(idx);
                 }}
-                className="flex-1 h-1.5 rounded-full cursor-pointer relative overflow-hidden bg-black/20 backdrop-blur-md"
+                className="flex-1 h-full cursor-pointer flex items-start pt-2 px-0.5"
               >
-                {idx < carouselIndex && <div className="absolute inset-0 bg-white" />}
-                {idx === carouselIndex && <div key={`active-${carouselIndex}`} className="absolute inset-0 bg-white origin-left" style={{ animation: 'storyProgress 5s linear forwards' }} />}
+                <div className="w-full h-1.5 rounded-full relative overflow-hidden bg-black/20 backdrop-blur-md">
+                  {idx < carouselIndex && <div className="absolute inset-0 bg-white" />}
+                  {idx === carouselIndex && <div key={`active-${carouselIndex}`} className="absolute inset-0 bg-white origin-left" style={{ animation: 'storyProgress 5s linear forwards' }} />}
+                </div>
               </div>
             ))}
           </div>
